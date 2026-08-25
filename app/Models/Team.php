@@ -25,6 +25,8 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, TeamInvitation> $invitations
  * @property-read Collection<int, Membership> $memberships
  * @property-read Collection<int, Project> $projects
+ * @property-read Collection<int, TeamKey> $keys
+ * @property-read Collection<int, Variable> $variables
  * @property-read Collection<int, User> $members
  */
 #[Fillable(['name', 'slug', 'is_personal'])]
@@ -87,6 +89,27 @@ class Team extends Model
     }
 
     /**
+     * Get all data encryption keys ever issued for this team.
+     *
+     * @return HasMany<TeamKey, $this>
+     */
+    public function keys(): HasMany
+    {
+        return $this->hasMany(TeamKey::class);
+    }
+
+    /**
+     * Get the team's active data encryption key, if it has one yet.
+     */
+    public function currentKey(): ?TeamKey
+    {
+        return $this->keys()
+            ->whereNull('retired_at')
+            ->orderByDesc('version')
+            ->first();
+    }
+
+    /**
      * Get all projects belonging to this team.
      *
      * @return HasMany<Project, $this>
@@ -94,6 +117,16 @@ class Team extends Model
     public function projects(): HasMany
     {
         return $this->hasMany(Project::class);
+    }
+
+    /**
+     * Get all variables owned by this team.
+     *
+     * @return HasMany<Variable, $this>
+     */
+    public function variables(): HasMany
+    {
+        return $this->hasMany(Variable::class);
     }
 
     /**

@@ -4,9 +4,11 @@ namespace App\Models;
 
 use Database\Factories\EnvironmentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -19,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Project $project
+ * @property-read Collection<int, VariableAssignment> $assignments
  */
 #[Fillable(['name', 'slug', 'auto_publish', 'sort_order'])]
 class Environment extends Model
@@ -49,6 +52,16 @@ class Environment extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /**
+     * Get the variables assigned to this environment.
+     *
+     * @return HasMany<VariableAssignment, $this>
+     */
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(VariableAssignment::class)->orderBy('sort_order')->orderBy('id');
     }
 
     /**
