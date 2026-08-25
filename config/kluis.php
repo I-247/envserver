@@ -44,4 +44,19 @@ return [
 
     'cipher' => 'aes-256-gcm',
 
+    /*
+    |--------------------------------------------------------------------------
+    | CLI Client
+    |--------------------------------------------------------------------------
+    |
+    | The OAuth device flow client the Kluis CLI authenticates with. Published
+    | over an unauthenticated discovery endpoint so "kluis login" only needs
+    | the server URL: a device flow client id is public by design.
+    |
+    | Create one with: php artisan kluis:cli-client
+    |
+    */
+
+    'cli_client_id' => env('KLUIS_CLI_CLIENT_ID'),
+
 ];

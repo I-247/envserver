@@ -15,6 +15,7 @@ class MasterKeyCommand extends Command
     protected $signature = 'kluis:master-key
                             {--show : Print a new key without writing it anywhere}
                             {--force : Rotate: move the current key to KLUIS_PREVIOUS_MASTER_KEYS}
+                            {--if-missing : Do nothing when a key is already set, for use in setup scripts}
                             {--env-file= : The env file to write to, defaults to the application .env}';
 
     /**
@@ -47,6 +48,12 @@ class MasterKeyCommand extends Command
 
         $contents = File::get($path);
         $current = $this->currentKey($contents);
+
+        if ($current !== null && $this->option('if-missing')) {
+            $this->components->info('KLUIS_MASTER_KEY is already set.');
+
+            return self::SUCCESS;
+        }
 
         if ($current !== null && ! $this->option('force')) {
             $this->error('KLUIS_MASTER_KEY is already set. Pass --force to rotate it.');
