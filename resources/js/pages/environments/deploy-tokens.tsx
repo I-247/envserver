@@ -1,6 +1,7 @@
 import { Form, Head, router, usePage } from '@inertiajs/react';
-import { KeyRound, Plus, Trash2 } from 'lucide-react';
+import { Download, KeyRound, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import CopyButton from '@/components/copy-button';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
@@ -30,13 +31,64 @@ type DeployTokenRow = {
     createdAt: string | null;
 };
 
+type NewToken = { name: string; clientId: string; clientSecret: string };
+
 type Props = {
     project: { name: string; slug: string };
     environment: { name: string; slug: string };
     server: string;
     tokens: DeployTokenRow[];
-    newToken: { name: string; clientId: string; clientSecret: string } | null;
+    newToken: NewToken | null;
 };
+
+/**
+ * Build the file a deploy server needs, in a shape a shell can source.
+ */
+function envFileFor(
+    token: NewToken,
+    server: string,
+    project: string,
+    environment: string,
+): string {
+    return [
+        `# Kluis deploy token "${token.name}"`,
+        `# Grants read only access to ${project}/${environment}, and nothing else.`,
+        '# Keep this on the deploy server. Never commit it.',
+        '',
+        `KLUIS_SERVER=${server}`,
+        `KLUIS_CLIENT_ID=${token.clientId}`,
+        `KLUIS_CLIENT_SECRET=${token.clientSecret}`,
+        '',
+    ].join('\n');
+}
+
+/**
+ * Hand the token to the browser as a file.
+ *
+ * Built here in the page rather than fetched from an endpoint: the secret is
+ * stored hashed, so the server could not serve this file even if we asked it
+ * to. This render is the only moment the plaintext exists anywhere.
+ */
+function downloadEnvFile(
+    token: NewToken,
+    server: string,
+    project: string,
+    environment: string,
+): void {
+    const contents = envFileFor(token, server, project, environment);
+    const url = URL.createObjectURL(
+        new Blob([contents], { type: 'text/plain;charset=utf-8' }),
+    );
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `kluis-${project}-${environment}.env`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+}
 
 export default function DeployTokens({
     project,
@@ -129,17 +181,61 @@ export default function DeployTokens({
                         className="space-y-3 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-4"
                         data-test="new-token"
                     >
-                        <p className="font-medium">
-                            {newToken.name} created. Copy this now, it is not
-                            shown again.
-                        </p>
-                        <pre className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs">
-                            {`export KLUIS_SERVER=${server}
-export KLUIS_CLIENT_ID=${newToken.clientId}
-export KLUIS_CLIENT_SECRET=${newToken.clientSecret}
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <p className="font-medium">
+                                    {newToken.name} created
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                    Take it now. The secret is stored hashed, so
+                                    this page is the only place it will ever
+                                    exist.
+                                </p>
+                            </div>
 
-kluis pull --constructive --out .env`}
+                            <div className="flex items-center gap-2">
+                                <CopyButton
+                                    value={envFileFor(
+                                        newToken,
+                                        server,
+                                        project.slug,
+                                        environment.slug,
+                                    )}
+                                    label="Copy"
+                                />
+                                <Button
+                                    type="button"
+                                    onClick={() =>
+                                        downloadEnvFile(
+                                            newToken,
+                                            server,
+                                            project.slug,
+                                            environment.slug,
+                                        )
+                                    }
+                                    data-test="download-deploy-token"
+                                >
+                                    <Download /> Download
+                                </Button>
+                            </div>
+                        </div>
+
+                        <pre className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs">
+                            {envFileFor(
+                                newToken,
+                                server,
+                                project.slug,
+                                environment.slug,
+                            )}
                         </pre>
+
+                        <p className="text-sm text-muted-foreground">
+                            Put it on the deploy server, then run{' '}
+                            <code className="font-mono">
+                                kluis pull --constructive --out .env
+                            </code>
+                            .
+                        </p>
                     </div>
                 ) : null}
 

@@ -7,6 +7,7 @@ use App\Models\Environment;
 use App\Models\Project;
 use App\Models\Team;
 use Inertia\Testing\AssertableInertia as Assert;
+use Laravel\Passport\Client;
 
 beforeEach(function () {
     $this->team = Team::factory()->create(['slug' => 'acme']);
@@ -56,6 +57,33 @@ it('shows the secret exactly once, right after creating the token', function () 
     // Reloading the page must not show it again.
     $this->get(tokensUrl())
         ->assertInertia(fn (Assert $page) => $page->where('newToken', null));
+});
+
+it('hands the page everything the downloaded file needs', function () {
+    actingAsTeamMember(TeamRole::Admin, $this->team);
+    config(['app.url' => 'https://kluis.example.com']);
+
+    // The file is built in the browser from exactly these three props, because
+    // the secret is stored hashed and the server could never serve it again.
+    $this->followingRedirects()
+        ->post(tokensUrl(), ['name' => 'Ploi production'])
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('server', 'https://kluis.example.com')
+            ->where('project.slug', 'webshop')
+            ->where('environment.slug', 'production')
+            ->has('newToken.clientId')
+            ->has('newToken.clientSecret')
+        );
+});
+
+it('stores the client secret hashed, so it can never be served again', function () {
+    actingAsTeamMember(TeamRole::Admin, $this->team);
+    $token = app(CreateDeployToken::class)->handle($this->environment, 'Ploi');
+
+    $stored = Client::findOrFail($token->clientId)->getRawOriginal('secret');
+
+    expect($stored)->not->toBe($token->clientSecret)
+        ->and($stored)->toStartWith('$2y$');
 });
 
 it('gives a deploy token read access only', function () {
