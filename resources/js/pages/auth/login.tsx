@@ -91,7 +91,12 @@ export default function Login({
                                     name="remember"
                                     tabIndex={3}
                                 />
-                                <Label htmlFor="remember">Remember me</Label>
+                                <Label
+                                    htmlFor="remember"
+                                    className="cursor-pointer"
+                                >
+                                    Remember me
+                                </Label>
                             </div>
 
                             <Button

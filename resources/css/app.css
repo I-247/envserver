@@ -140,4 +140,22 @@
     body {
         @apply bg-background text-foreground;
     }
+
+    /*
+     * Tailwind v4 dropped the opinionated cursor: pointer on buttons and now
+     * follows the browser default, which is an arrow. Put it back, because a
+     * control that does something on click should look like one.
+     *
+     * Disabled controls are excluded, and shadcn already sets
+     * pointer-events-none on them anyway.
+     */
+    button:not(:disabled),
+    summary,
+    [role='button']:not([aria-disabled='true']),
+    [role='tab']:not([aria-disabled='true']),
+    [role='switch']:not([aria-disabled='true']),
+    [role='checkbox']:not([aria-disabled='true']),
+    [role='radio']:not([aria-disabled='true']) {
+        cursor: pointer;
+    }
 }
