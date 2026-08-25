@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
@@ -25,6 +26,7 @@ use Illuminate\Support\Carbon;
  * @property-read Project $project
  * @property-read Collection<int, VariableAssignment> $assignments
  * @property-read Collection<int, Release> $releases
+ * @property-read Collection<int, DeployToken> $deployTokens
  */
 #[Fillable(['name', 'slug', 'auto_publish', 'sort_order'])]
 class Environment extends Model
@@ -65,6 +67,31 @@ class Environment extends Model
     public function assignments(): HasMany
     {
         return $this->hasMany(VariableAssignment::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    /**
+     * Get the variables assigned to this environment.
+     *
+     * Route model binding scopes {variable} through this relation, so a URL
+     * can only ever address a variable this environment actually uses.
+     *
+     * @return BelongsToMany<Variable, $this>
+     */
+    public function variables(): BelongsToMany
+    {
+        return $this->belongsToMany(Variable::class, 'variable_assignments')
+            ->withPivot(['alias_key', 'sort_order'])
+            ->withTimestamps();
+    }
+
+    /**
+     * Get the deploy tokens issued for this environment.
+     *
+     * @return HasMany<DeployToken, $this>
+     */
+    public function deployTokens(): HasMany
+    {
+        return $this->hasMany(DeployToken::class);
     }
 
     /**

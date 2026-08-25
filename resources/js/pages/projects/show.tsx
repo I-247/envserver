@@ -1,7 +1,8 @@
-import { Head, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { ShieldCheck, Zap } from 'lucide-react';
 import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
+import environments from '@/routes/environments';
 import { index, show } from '@/routes/projects';
 import type { ProjectDetail } from '@/types';
 
@@ -30,10 +31,15 @@ export default function ProjectShow({ project }: Props) {
 
                 <div className="grid gap-3 md:grid-cols-3">
                     {project.environments.map((environment) => (
-                        <div
+                        <Link
                             key={environment.slug}
+                            href={environments.show([
+                                teamSlug,
+                                project.slug,
+                                environment.slug,
+                            ])}
                             data-test="environment-card"
-                            className="flex flex-col gap-2 rounded-lg border p-4"
+                            className="flex flex-col gap-2 rounded-lg border p-4 transition-colors hover:bg-accent"
                         >
                             <div className="flex items-center justify-between">
                                 <span className="font-medium">
@@ -62,7 +68,7 @@ export default function ProjectShow({ project }: Props) {
                             <code className="text-xs text-muted-foreground">
                                 {teamSlug}/{project.slug}/{environment.slug}
                             </code>
-                        </div>
+                        </Link>
                     ))}
                 </div>
             </div>
