@@ -1,4 +1,4 @@
-export type TeamRole = 'owner' | 'admin' | 'member';
+export type TeamRole = 'owner' | 'admin' | 'member' | 'viewer';
 
 export type Team = {
     id: number;
@@ -49,6 +49,16 @@ export type TeamPermissions = {
     canRemoveMember: boolean;
     canCreateInvitation: boolean;
     canCancelInvitation: boolean;
+};
+
+export type KluisPermissions = {
+    canCreateProject: boolean;
+    canUpdateProject: boolean;
+    canDeleteProject: boolean;
+    canManageVariable: boolean;
+    canViewSecretValue: boolean;
+    canPublishRelease: boolean;
+    canManageDeployToken: boolean;
 };
 
 export type RoleOption = {

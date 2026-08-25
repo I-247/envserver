@@ -13,4 +13,15 @@ enum TeamPermission: string
 
     case CreateInvitation = 'invitation:create';
     case CancelInvitation = 'invitation:cancel';
+
+    case CreateProject = 'project:create';
+    case UpdateProject = 'project:update';
+    case DeleteProject = 'project:delete';
+
+    case ManageVariable = 'variable:manage';
+    case ViewSecretValue = 'secret:view';
+
+    case PublishRelease = 'release:publish';
+
+    case ManageDeployToken = 'deploy-token:manage';
 }

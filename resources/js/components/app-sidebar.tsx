@@ -1,5 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid } from 'lucide-react';
+import { BookOpen, Boxes, FolderGit2, LayoutGrid } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -15,6 +15,7 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { index as projectsIndex } from '@/routes/projects';
 import type { NavItem } from '@/types';
 
 export function AppSidebar() {
@@ -29,6 +30,15 @@ export function AppSidebar() {
             href: dashboardUrl,
             icon: LayoutGrid,
         },
+        ...(page.props.currentTeam
+            ? [
+                  {
+                      title: 'Projects',
+                      href: projectsIndex(page.props.currentTeam.slug),
+                      icon: Boxes,
+                  },
+              ]
+            : []),
     ];
 
     const footerNavItems: NavItem[] = [
