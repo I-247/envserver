@@ -2,6 +2,7 @@
 
 namespace App\Actions\Variables;
 
+use App\Actions\Releases\PublishAutomaticReleases;
 use App\Models\User;
 use App\Models\Variable;
 use App\Models\VariableVersion;
@@ -10,7 +11,10 @@ use SensitiveParameter;
 
 class UpdateVariableValue
 {
-    public function __construct(private readonly WriteVariableVersion $writeVersion) {}
+    public function __construct(
+        private readonly WriteVariableVersion $writeVersion,
+        private readonly PublishAutomaticReleases $publishAutomatically,
+    ) {}
 
     /**
      * Append a new version, unless the value did not actually change.
@@ -31,7 +35,11 @@ class UpdateVariableValue
                 return $current;
             }
 
-            return $this->writeVersion->handle($variable, $value, $author, $note);
+            $version = $this->writeVersion->handle($variable, $value, $author, $note);
+
+            $this->publishAutomatically->handle($variable->refresh(), $author, $note);
+
+            return $version;
         });
     }
 }

@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Actions\Variables\ResolveEnvironmentVariables;
+use App\Data\ResolvedVariable;
 use Database\Factories\EnvironmentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Collection;
@@ -22,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read Project $project
  * @property-read Collection<int, VariableAssignment> $assignments
+ * @property-read Collection<int, Release> $releases
  */
 #[Fillable(['name', 'slug', 'auto_publish', 'sort_order'])]
 class Environment extends Model
@@ -62,6 +65,40 @@ class Environment extends Model
     public function assignments(): HasMany
     {
         return $this->hasMany(VariableAssignment::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    /**
+     * Get the environment's releases, newest first.
+     *
+     * @return HasMany<Release, $this>
+     */
+    public function releases(): HasMany
+    {
+        return $this->hasMany(Release::class)->orderByDesc('version');
+    }
+
+    /**
+     * Get the release the CLI would serve by default.
+     */
+    public function latestRelease(): ?Release
+    {
+        return $this->releases()->first();
+    }
+
+    /**
+     * Determine whether the current variables differ from the last release.
+     *
+     * For an environment with auto_publish off this is the signal that
+     * something is waiting to be promoted on purpose.
+     */
+    public function hasPendingChanges(): bool
+    {
+        $resolved = app(ResolveEnvironmentVariables::class)
+            ->handle($this)
+            ->mapWithKeys(fn (ResolvedVariable $entry) => [$entry->key => $entry->version->id])
+            ->all();
+
+        return ($this->latestRelease()?->fingerprint() ?? []) !== $resolved;
     }
 
     /**
