@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Environments;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Releases\PublishRelease;
 use App\Actions\Releases\RollbackToRelease;
+use App\Enums\AuditAction;
 use App\Http\Controllers\Controller;
 use App\Models\Environment;
 use App\Models\Project;
@@ -85,12 +87,21 @@ class ReleaseController extends Controller
         Environment $environment,
         Release $release,
         RollbackToRelease $rollback,
+        RecordAuditEvent $audit,
     ): RedirectResponse {
         Gate::authorize('publishReleases', $project);
 
         $impact = $rollback->sharedImpact($release);
 
         $restored = $rollback->handle($release, $request->user());
+
+        $audit->handle($currentTeam, AuditAction::ReleaseRolledBack, $request->user(), $release, [
+            'project' => $project->slug,
+            'environment' => $environment->slug,
+            'to' => $release->version,
+            'restored_as' => $restored?->version,
+            'other_environments_affected' => $impact->count(),
+        ]);
 
         Inertia::flash('toast', [
             'type' => 'success',

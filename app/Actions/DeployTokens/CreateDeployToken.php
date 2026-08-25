@@ -2,7 +2,9 @@
 
 namespace App\Actions\DeployTokens;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Data\NewDeployToken;
+use App\Enums\AuditAction;
 use App\Models\DeployToken;
 use App\Models\Environment;
 use App\Models\User;
@@ -12,7 +14,10 @@ use Laravel\Passport\ClientRepository;
 
 class CreateDeployToken
 {
-    public function __construct(private readonly ClientRepository $clients) {}
+    public function __construct(
+        private readonly ClientRepository $clients,
+        private readonly RecordAuditEvent $audit,
+    ) {}
 
     /**
      * Issue a machine token that may read exactly one environment.
@@ -39,6 +44,19 @@ class CreateDeployToken
                 'created_by' => $creator?->id,
                 'expires_at' => $expiresAt,
             ]);
+
+            $this->audit->handle(
+                $environment->project->team,
+                AuditAction::DeployTokenCreated,
+                $creator,
+                $token,
+                [
+                    'name' => $name,
+                    'project' => $environment->project->slug,
+                    'environment' => $environment->slug,
+                    'scopes' => $scopes,
+                ],
+            );
 
             return new NewDeployToken($token, (string) $client->getKey(), (string) $client->plainSecret);
         });

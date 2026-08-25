@@ -91,6 +91,17 @@ class TeamPolicy
     }
 
     /**
+     * Determine whether the user can read the team's audit trail.
+     *
+     * Tied to team administration rather than to secret access: the trail
+     * records who looked at what, which is oversight, not day to day work.
+     */
+    public function viewAudit(User $user, Team $team): bool
+    {
+        return $user->hasTeamPermission($team, TeamPermission::UpdateTeam);
+    }
+
+    /**
      * Determine whether the user can delete the model.
      */
     public function delete(User $user, Team $team): bool

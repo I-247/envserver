@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Environments;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\DeployTokens\CreateDeployToken;
 use App\Enums\ApiScope;
+use App\Enums\AuditAction;
 use App\Http\Controllers\Controller;
 use App\Models\DeployToken;
 use App\Models\Environment;
@@ -89,14 +91,22 @@ class DeployTokenController extends Controller
      * Revoke a deploy token.
      */
     public function destroy(
+        Request $request,
         Team $currentTeam,
         Project $project,
         Environment $environment,
         DeployToken $deployToken,
+        RecordAuditEvent $audit,
     ): RedirectResponse {
         Gate::authorize('manageDeployTokens', $project);
 
         $deployToken->revoke();
+
+        $audit->handle($currentTeam, AuditAction::DeployTokenRevoked, $request->user(), $deployToken, [
+            'name' => $deployToken->name,
+            'project' => $project->slug,
+            'environment' => $environment->slug,
+        ]);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Deploy token revoked.')]);
 

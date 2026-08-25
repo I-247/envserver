@@ -120,6 +120,16 @@ class Team extends Model
     }
 
     /**
+     * Get the team's audit trail.
+     *
+     * @return HasMany<AuditEvent, $this>
+     */
+    public function auditEvents(): HasMany
+    {
+        return $this->hasMany(AuditEvent::class);
+    }
+
+    /**
      * Get all variables owned by this team.
      *
      * @return HasMany<Variable, $this>

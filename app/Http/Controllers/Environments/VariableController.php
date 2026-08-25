@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Environments;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Variables\AttachVariableToEnvironment;
 use App\Actions\Variables\CreateVariable;
 use App\Actions\Variables\UpdateVariableValue;
+use App\Enums\AuditAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Variables\StoreVariableRequest;
 use App\Http\Requests\Variables\UpdateVariableRequest;
@@ -91,14 +93,22 @@ class VariableController extends Controller
      * history is worth keeping either way.
      */
     public function destroy(
+        Request $request,
         Team $currentTeam,
         Project $project,
         Environment $environment,
         Variable $variable,
+        RecordAuditEvent $audit,
     ): RedirectResponse {
         Gate::authorize('manageVariables', $project);
 
         $environment->assignments()->where('variable_id', $variable->id)->delete();
+
+        $audit->handle($currentTeam, AuditAction::VariableDetached, $request->user(), $variable, [
+            'key' => $variable->key,
+            'project' => $project->slug,
+            'environment' => $environment->slug,
+        ]);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Variable removed from this environment.')]);
 
@@ -114,10 +124,17 @@ class VariableController extends Controller
         Project $project,
         Environment $environment,
         Variable $variable,
+        RecordAuditEvent $audit,
     ): JsonResponse {
         Gate::authorize('viewSecrets', $project);
 
         abort_if($variable->currentVersion() === null, 404);
+
+        $audit->handle($currentTeam, AuditAction::SecretRevealed, $request->user(), $variable, [
+            'key' => $variable->key,
+            'project' => $project->slug,
+            'environment' => $environment->slug,
+        ]);
 
         return response()->json([
             'value' => $variable->currentVersion()->reveal(),

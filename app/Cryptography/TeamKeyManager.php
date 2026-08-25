@@ -84,6 +84,32 @@ class TeamKeyManager
     }
 
     /**
+     * Re-wrap a team's data key with the current master key.
+     *
+     * Cheap by design: the data key itself is unchanged, so not a single
+     * stored secret has to be re-encrypted. This is what a master key
+     * rotation actually costs, and it is why the DEK exists at all.
+     */
+    public function rewrap(Team $team): bool
+    {
+        $key = $team->currentKey();
+
+        if ($key === null) {
+            return true;
+        }
+
+        $dataKey = $this->unwrap($key);
+
+        $key->forceFill([
+            'wrapped_key' => $this->cipher->encrypt($dataKey, $this->masterKeys->current()),
+        ])->save();
+
+        unset($this->cache[$team->id]);
+
+        return true;
+    }
+
+    /**
      * Unwrap a stored key, walking the current and retired master keys.
      *
      * Trying every master key is what makes a rotation gradual: keys wrapped

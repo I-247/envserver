@@ -9,3 +9,11 @@ Schedule::call(function () {
         ->where('expires_at', '<', now())
         ->delete();
 })->daily()->description('Delete expired team invitations');
+
+/*
+ * Revoked and expired OAuth tokens serve no purpose once they are dead, and a
+ * table of them is one more place a leak could start.
+ */
+Schedule::command('passport:purge')
+    ->daily()
+    ->description('Purge revoked and expired OAuth tokens');

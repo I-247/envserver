@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Audit\AuditController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Environments\DeployTokenController;
 use App\Http\Controllers\Environments\EnvironmentController;
@@ -17,6 +18,8 @@ Route::prefix('{current_team}')
     ->scopeBindings()
     ->group(function () {
         Route::get('dashboard', DashboardController::class)->name('dashboard');
+
+        Route::get('audit', AuditController::class)->name('audit');
 
         Route::get('projects', [ProjectController::class, 'index'])->name('projects.index');
         Route::post('projects', [ProjectController::class, 'store'])->name('projects.store');

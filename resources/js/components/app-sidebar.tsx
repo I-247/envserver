@@ -1,5 +1,11 @@
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Boxes, FolderGit2, LayoutGrid } from 'lucide-react';
+import {
+    BookOpen,
+    Boxes,
+    FolderGit2,
+    LayoutGrid,
+    ScrollText,
+} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -14,7 +20,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard } from '@/routes';
+import { audit, dashboard } from '@/routes';
 import { index as projectsIndex } from '@/routes/projects';
 import type { NavItem } from '@/types';
 
@@ -37,6 +43,16 @@ export function AppSidebar() {
                       href: projectsIndex(page.props.currentTeam.slug),
                       icon: Boxes,
                   },
+                  ...(page.props.currentTeam.role === 'owner' ||
+                  page.props.currentTeam.role === 'admin'
+                      ? [
+                            {
+                                title: 'Audit trail',
+                                href: audit(page.props.currentTeam.slug),
+                                icon: ScrollText,
+                            },
+                        ]
+                      : []),
               ]
             : []),
     ];

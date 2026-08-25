@@ -2,7 +2,9 @@
 
 namespace App\Actions\Variables;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Releases\PublishAutomaticReleases;
+use App\Enums\AuditAction;
 use App\Models\User;
 use App\Models\Variable;
 use App\Models\VariableVersion;
@@ -14,6 +16,7 @@ class UpdateVariableValue
     public function __construct(
         private readonly WriteVariableVersion $writeVersion,
         private readonly PublishAutomaticReleases $publishAutomatically,
+        private readonly RecordAuditEvent $audit,
     ) {}
 
     /**
@@ -36,6 +39,11 @@ class UpdateVariableValue
             }
 
             $version = $this->writeVersion->handle($variable, $value, $author, $note);
+
+            $this->audit->handle($variable->team, AuditAction::VariableUpdated, $author, $variable, [
+                'key' => $variable->key,
+                'version' => $version->version,
+            ]);
 
             $this->publishAutomatically->handle($variable->refresh(), $author, $note);
 

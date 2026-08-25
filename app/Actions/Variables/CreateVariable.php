@@ -2,6 +2,8 @@
 
 namespace App\Actions\Variables;
 
+use App\Actions\Audit\RecordAuditEvent;
+use App\Enums\AuditAction;
 use App\Models\Team;
 use App\Models\User;
 use App\Models\Variable;
@@ -10,7 +12,10 @@ use SensitiveParameter;
 
 class CreateVariable
 {
-    public function __construct(private readonly WriteVariableVersion $writeVersion) {}
+    public function __construct(
+        private readonly WriteVariableVersion $writeVersion,
+        private readonly RecordAuditEvent $audit,
+    ) {}
 
     /**
      * Create a variable for the team along with its first version.
@@ -30,6 +35,8 @@ class CreateVariable
             ]);
 
             $this->writeVersion->handle($variable, $value, $author);
+
+            $this->audit->handle($team, AuditAction::VariableCreated, $author, $variable, ['key' => $key]);
 
             return $variable;
         });

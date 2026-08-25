@@ -2,8 +2,10 @@
 
 namespace App\Actions\Releases;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Variables\ResolveEnvironmentVariables;
 use App\Data\ResolvedVariable;
+use App\Enums\AuditAction;
 use App\Models\Environment;
 use App\Models\Release;
 use App\Models\User;
@@ -12,7 +14,10 @@ use Illuminate\Support\Facades\DB;
 
 class PublishRelease
 {
-    public function __construct(private readonly ResolveEnvironmentVariables $resolve) {}
+    public function __construct(
+        private readonly ResolveEnvironmentVariables $resolve,
+        private readonly RecordAuditEvent $audit,
+    ) {}
 
     /**
      * Snapshot the environment's current variables as a new release.
@@ -42,6 +47,19 @@ class PublishRelease
                 'variable_version_id' => $entry->version->id,
                 'key' => $entry->key,
             ]));
+
+            $this->audit->handle(
+                $environment->project->team,
+                AuditAction::ReleasePublished,
+                $publisher,
+                $release,
+                [
+                    'project' => $environment->project->slug,
+                    'environment' => $environment->slug,
+                    'version' => $release->version,
+                    'variables' => $resolved->count(),
+                ],
+            );
 
             return $release->load('items');
         });
