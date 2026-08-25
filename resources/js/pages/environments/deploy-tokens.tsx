@@ -54,6 +54,11 @@ function envFileFor(
         `# Kluis deploy token "${token.name}"`,
         `# Grants read only access to ${project}/${environment}, and nothing else.`,
         '# Keep this on the deploy server. Never commit it.',
+        '#',
+        '# Load it into the environment, then pull:',
+        '#',
+        '#   set -a; . ./this-file; set +a',
+        '#   kluis pull --constructive --out .env',
         '',
         `KLUIS_SERVER=${server}`,
         `KLUIS_CLIENT_ID=${token.clientId}`,
@@ -82,7 +87,10 @@ function downloadEnvFile(
 
     const link = document.createElement('a');
     link.href = url;
-    link.download = `kluis-${project}-${environment}.env`;
+    // .txt rather than .env: neither Windows nor macOS has a handler for a
+    // bare .env, so the download would land as a file nothing opens. The
+    // contents are still env syntax, ready to be sourced or pasted.
+    link.download = `kluis-${project}-${environment}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
