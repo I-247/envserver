@@ -2,7 +2,9 @@
 
 namespace App\Actions\Releases;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Variables\WriteVariableVersion;
+use App\Enums\AuditAction;
 use App\Models\Environment;
 use App\Models\Release;
 use App\Models\ReleaseItem;
@@ -28,6 +30,7 @@ class RollbackToRelease
     public function __construct(
         private readonly WriteVariableVersion $writeVersion,
         private readonly PublishRelease $publish,
+        private readonly RecordAuditEvent $audit,
     ) {}
 
     /**
@@ -36,6 +39,10 @@ class RollbackToRelease
     public function handle(Release $release, ?User $author = null): ?Release
     {
         return DB::transaction(function () use ($release, $author) {
+            // Measured before anything is rewritten: once the old values are
+            // back, nothing differs any more and the impact would read zero.
+            $impact = $this->sharedImpact($release);
+
             $release->loadMissing('items.version', 'items.variable');
 
             foreach ($release->items as $item) {
@@ -53,11 +60,30 @@ class RollbackToRelease
                 );
             }
 
-            return $this->publish->handle(
+            $restored = $this->publish->handle(
                 $release->environment,
                 $author,
                 "Teruggedraaid naar release {$release->version}",
             );
+
+            // Recorded here rather than in the controller so a rollback is
+            // logged no matter who triggers it: the portal, the API, or a
+            // console command.
+            $this->audit->handle(
+                $release->environment->project->team,
+                AuditAction::ReleaseRolledBack,
+                $author,
+                $release,
+                [
+                    'project' => $release->environment->project->slug,
+                    'environment' => $release->environment->slug,
+                    'to' => $release->version,
+                    'restored_as' => $restored?->version,
+                    'other_environments_affected' => $impact->count(),
+                ],
+            );
+
+            return $restored;
         });
     }
 

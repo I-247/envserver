@@ -2,6 +2,7 @@
 
 use App\Actions\DeployTokens\CreateDeployToken;
 use App\Actions\Releases\PublishRelease;
+use App\Actions\Releases\RollbackToRelease;
 use App\Actions\Variables\AttachVariableToEnvironment;
 use App\Actions\Variables\CreateVariable;
 use App\Actions\Variables\UpdateVariableValue;
@@ -139,4 +140,40 @@ it('never shows one team the trail of another', function () {
     $response = $this->get('/acme/audit')->assertOk();
 
     expect($response->getContent())->not->toContain('THEIR_SECRET');
+});
+
+it('records a rollback regardless of who triggers it', function () {
+    $user = actingAsTeamMember(TeamRole::Member, $this->team);
+    $variable = auditedVariable('A', 'original');
+    $first = app(PublishRelease::class)->handle($this->environment, $user);
+
+    app(UpdateVariableValue::class)->handle($variable, 'broken', $user);
+
+    // Straight through the action, bypassing the controller entirely.
+    app(RollbackToRelease::class)->handle($first, $user);
+
+    $event = AuditEvent::where('action', AuditAction::ReleaseRolledBack)->sole();
+
+    expect($event->metadata['to'])->toBe($first->version)
+        ->and($event->actor_id)->toBe($user->id)
+        ->and($event->metadata['other_environments_affected'])->toBe(0);
+});
+
+it('records how far a shared rollback reached', function () {
+    $user = actingAsTeamMember(TeamRole::Member, $this->team);
+    $variable = auditedVariable('SENTRY_DSN', 'original');
+
+    app(AttachVariableToEnvironment::class)->handle(
+        $variable,
+        Environment::factory()->for(Project::factory()->for($this->team))->create(),
+    );
+
+    $first = app(PublishRelease::class)->handle($this->environment, $user);
+    app(UpdateVariableValue::class)->handle($variable, 'broken', $user);
+
+    app(RollbackToRelease::class)->handle($first, $user);
+
+    $event = AuditEvent::where('action', AuditAction::ReleaseRolledBack)->sole();
+
+    expect($event->metadata['other_environments_affected'])->toBe(1);
 });
