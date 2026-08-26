@@ -13,9 +13,10 @@
 /vendor
 .DS_Store
 .env
-.env.backup
-.env.kluis
-.env.production
+# Every local variant, not a list that has to be kept up to date: the one
+# that got missed is the one that ends up in a commit.
+.env.*
+!.env.example
 .phpactor.json
 .phpunit.result.cache
 Homestead.json
