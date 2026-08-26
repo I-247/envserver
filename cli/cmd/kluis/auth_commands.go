@@ -42,8 +42,13 @@ func loginCommand() *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "\n  Open %s\n  and enter the code %s\n\n  Waiting for approval...\n",
-				code.VerificationURI, code.UserCode)
+			p := printer(cmd)
+
+			p.Blank()
+			p.Info("Open %s", p.Path(code.VerificationURI))
+			p.Note("and enter the code  %s", p.Highlight(code.UserCode))
+			p.Blank()
+			p.Note("Waiting for approval...")
 
 			credentials, err := auth.PollForToken(ctx, discovery, code)
 			if err != nil {
@@ -55,7 +60,10 @@ func loginCommand() *cobra.Command {
 			}
 
 			path, _ := config.CredentialsPath()
-			fmt.Fprintf(cmd.OutOrStdout(), "\n  Logged in to %s.\n  Token stored in %s\n", server, path)
+
+			p.Blank()
+			p.Done("Logged in to %s", p.Bold(server))
+			p.Note("Token stored in %s — this machine only.", path)
 
 			return nil
 		},
@@ -87,7 +95,8 @@ func logoutCommand() *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Logged out of %s.\n", server)
+			p := printer(cmd)
+			p.Done("Logged out of %s", p.Bold(server))
 
 			return nil
 		},
@@ -114,8 +123,21 @@ func whoamiCommand() *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Server   %s\n", s.project.Server)
-			fmt.Fprintf(cmd.OutOrStdout(), "Projects %d\n", len(projects))
+			p := printer(cmd)
+
+			p.Title("Signed in")
+			p.Field("Server", s.project.Server)
+			p.Field("Projects", fmt.Sprintf("%d", len(projects)))
+
+			if s.project.Name != "" {
+				p.Field("Linked", s.project.Team+"/"+s.project.Name+"/"+s.project.Environment)
+			}
+
+			if deployTokenSet() {
+				p.Field("Auth", "deploy token from the environment")
+			} else {
+				p.Field("Auth", "your login on this machine")
+			}
 
 			return nil
 		},

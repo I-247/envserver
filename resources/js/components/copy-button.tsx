@@ -84,12 +84,13 @@ export default function CopyButton({
             onClick={copy}
             className={cn(className)}
             aria-label={label ? undefined : 'Copy to clipboard'}
+            title={label ? undefined : text}
             data-test="copy-button"
         >
             {state === 'copied' ? <Check /> : <Copy />}
-            {label || state !== 'idle' ? (
-                <span aria-live="polite">{text}</span>
-            ) : null}
+            <span className={cn(!label && 'sr-only')} aria-live="polite">
+                {text}
+            </span>
         </Button>
     );
 }

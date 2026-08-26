@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Environments;
 use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Variables\AttachVariableToEnvironment;
 use App\Actions\Variables\CreateVariable;
+use App\Actions\Variables\DetachVariableFromEnvironment;
 use App\Actions\Variables\UpdateVariableValue;
 use App\Enums\AuditAction;
 use App\Http\Controllers\Controller;
@@ -41,6 +42,8 @@ class VariableController extends Controller
             $request->validated('value'),
             $request->user(),
             $request->validated('description'),
+            $project,
+            $request->validated('rotate_after_days'),
         );
 
         $attach->handle($variable, $environment);
@@ -52,6 +55,12 @@ class VariableController extends Controller
 
     /**
      * Change a variable's value, description or alias.
+     *
+     * The alias belongs to this environment, but the value and description
+     * belong to the variable itself, and through it to every environment
+     * using it. A borrowing project may therefore only rename it here: a
+     * value it did not create is changed where it lives, by the project that
+     * answers for it.
      */
     public function update(
         UpdateVariableRequest $request,
@@ -64,6 +73,12 @@ class VariableController extends Controller
     ): RedirectResponse {
         Gate::authorize('manageVariables', $project);
 
+        abort_if(
+            $variable->isBorrowedBy($project) && ($request->has('value') || $request->has('description') || $request->has('rotate_after_days')),
+            403,
+            'This variable is owned by another project.',
+        );
+
         if ($request->has('value')) {
             $update->handle(
                 $variable,
@@ -75,6 +90,10 @@ class VariableController extends Controller
 
         if ($request->has('description')) {
             $variable->update(['description' => $request->validated('description')]);
+        }
+
+        if ($request->has('rotate_after_days')) {
+            $variable->update(['rotate_after_days' => $request->validated('rotate_after_days')]);
         }
 
         if ($request->has('alias_key')) {
@@ -90,7 +109,8 @@ class VariableController extends Controller
      * Remove a variable from this environment.
      *
      * The variable itself survives: it may still be in use elsewhere, and its
-     * history is worth keeping either way.
+     * history is worth keeping either way. If this environment was the owning
+     * project's last hold on a shared variable, another project inherits it.
      */
     public function destroy(
         Request $request,
@@ -98,19 +118,21 @@ class VariableController extends Controller
         Project $project,
         Environment $environment,
         Variable $variable,
-        RecordAuditEvent $audit,
+        DetachVariableFromEnvironment $detach,
     ): RedirectResponse {
         Gate::authorize('manageVariables', $project);
 
-        $environment->assignments()->where('variable_id', $variable->id)->delete();
+        $heir = $detach->handle($variable, $environment, $request->user());
 
-        $audit->handle($currentTeam, AuditAction::VariableDetached, $request->user(), $variable, [
-            'key' => $variable->key,
-            'project' => $project->slug,
-            'environment' => $environment->slug,
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => $heir === null
+                ? __('Variable removed from this environment.')
+                : __(':key is still shared, so :project now owns it.', [
+                    'key' => $variable->key,
+                    'project' => $heir->name,
+                ]),
         ]);
-
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('Variable removed from this environment.')]);
 
         return back();
     }

@@ -3,6 +3,7 @@
 use App\Actions\Releases\PublishRelease;
 use App\Actions\Variables\AttachVariableToEnvironment;
 use App\Actions\Variables\CreateVariable;
+use App\Actions\Variables\UpdateVariableValue;
 use App\Enums\TeamRole;
 use App\Models\Environment;
 use App\Models\Project;
@@ -156,6 +157,77 @@ describe('pushing variables', function () {
         $this->postJson(apiPath('/variables'), ['variables' => ['SENTRY_DSN' => 'new']])
             ->assertOk()
             ->assertJsonCount(1, 'data.shared_impact');
+    });
+
+    it('accepts an empty value without turning it into null', function () {
+        actingViaCli();
+
+        $this->postJson(apiPath('/variables'), ['variables' => ['AWS_BUCKET' => '']])
+            ->assertOk()
+            ->assertJsonPath('data.created', 1);
+
+        expect(Variable::sole()->currentVersion()->reveal())->toBe('');
+    });
+
+    it('publishes one release for the whole push, not one per key', function () {
+        $this->environment->update(['auto_publish' => true]);
+
+        actingViaCli();
+
+        $this->postJson(apiPath('/variables'), [
+            'variables' => ['APP_ENV' => 'production', 'APP_DEBUG' => 'false', 'APP_KEY' => 'base64:x'],
+        ])->assertOk();
+
+        expect($this->environment->releases()->count())->toBe(1)
+            ->and($this->environment->latestRelease()->items()->count())->toBe(3);
+    });
+
+    it('leaves an environment that did not opt in unpublished', function () {
+        actingViaCli();
+
+        $this->postJson(apiPath('/variables'), ['variables' => ['APP_ENV' => 'production']])->assertOk();
+
+        expect($this->environment->releases()->count())->toBe(0);
+    });
+
+    it('publishes once per environment a shared variable reaches', function () {
+        $this->environment->update(['auto_publish' => true]);
+
+        $shared = cliVariable('SENTRY_DSN', 'old');
+        $other = Environment::factory()
+            ->for(Project::factory()->for($this->team))
+            ->create(['auto_publish' => true]);
+        app(AttachVariableToEnvironment::class)->handle($shared, $other);
+
+        $releasesBefore = $other->releases()->count();
+
+        actingViaCli();
+
+        $this->postJson(apiPath('/variables'), [
+            'variables' => ['SENTRY_DSN' => 'new', 'APP_ENV' => 'production'],
+        ])->assertOk();
+
+        expect($other->releases()->count())->toBe($releasesBefore + 1);
+    });
+
+    it('publishes nothing when the push fails halfway', function () {
+        cliVariable('APP_ENV', 'staging');
+
+        // Opted in only now, so the setup above leaves no release behind.
+        $this->environment->update(['auto_publish' => true]);
+
+        actingViaCli();
+
+        $this->withoutExceptionHandling();
+
+        $this->mock(UpdateVariableValue::class)
+            ->shouldReceive('handle')
+            ->andThrow(new RuntimeException('boom'));
+
+        expect(fn () => $this->postJson(apiPath('/variables'), ['variables' => ['APP_ENV' => 'production']]))
+            ->toThrow(RuntimeException::class);
+
+        expect($this->environment->releases()->count())->toBe(0);
     });
 
     it('refuses to push without the write scope', function () {

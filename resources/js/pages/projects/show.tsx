@@ -1,9 +1,21 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { ShieldCheck, Zap } from 'lucide-react';
+import {
+    Columns3,
+    KeyRound,
+    Pencil,
+    Plus,
+    ShieldCheck,
+    Trash2,
+    Zap,
+} from 'lucide-react';
+import CreateEnvironmentModal from '@/components/create-environment-modal';
+import DeleteProjectModal from '@/components/delete-project-modal';
+import EditProjectModal from '@/components/edit-project-modal';
 import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import environments from '@/routes/environments';
-import { index, show } from '@/routes/projects';
+import { drift, index, show } from '@/routes/projects';
 import type { ProjectDetail } from '@/types';
 
 type Props = {
@@ -14,7 +26,7 @@ type Props = {
     };
 };
 
-export default function ProjectShow({ project }: Props) {
+export default function ProjectShow({ project, permissions }: Props) {
     const page = usePage();
     const teamSlug = page.props.currentTeam?.slug ?? '';
 
@@ -23,11 +35,64 @@ export default function ProjectShow({ project }: Props) {
             <Head title={project.name} />
 
             <div className="flex flex-col space-y-6 p-4">
-                <Heading
-                    variant="small"
-                    title={project.name}
-                    description={project.description ?? project.slug}
-                />
+                <div className="flex items-center justify-between">
+                    <Heading
+                        variant="small"
+                        title={project.name}
+                        description={project.description ?? project.slug}
+                    />
+
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" asChild>
+                            <Link
+                                href={drift([teamSlug, project.slug])}
+                                data-test="project-drift-link"
+                            >
+                                <Columns3 /> Compare environments
+                            </Link>
+                        </Button>
+
+                        {permissions.canUpdateProject ? (
+                            <CreateEnvironmentModal
+                                teamSlug={teamSlug}
+                                projectSlug={project.slug}
+                            >
+                                <Button data-test="environment-new-button">
+                                    <Plus /> New environment
+                                </Button>
+                            </CreateEnvironmentModal>
+                        ) : null}
+
+                        {permissions.canUpdateProject ? (
+                            <EditProjectModal
+                                teamSlug={teamSlug}
+                                project={project}
+                            >
+                                <Button
+                                    variant="outline"
+                                    data-test="project-edit-button"
+                                >
+                                    <Pencil /> Edit project
+                                </Button>
+                            </EditProjectModal>
+                        ) : null}
+
+                        {permissions.canDeleteProject ? (
+                            <DeleteProjectModal
+                                teamSlug={teamSlug}
+                                project={project}
+                            >
+                                <Button
+                                    variant="outline"
+                                    data-test="project-delete-button"
+                                    className="text-destructive hover:text-destructive"
+                                >
+                                    <Trash2 /> Delete
+                                </Button>
+                            </DeleteProjectModal>
+                        ) : null}
+                    </div>
+                </div>
 
                 <div className="grid gap-3 md:grid-cols-3">
                     {project.environments.map((environment) => (
@@ -65,9 +130,21 @@ export default function ProjectShow({ project }: Props) {
                                     )}
                                 </Badge>
                             </div>
-                            <code className="text-xs text-muted-foreground">
-                                {teamSlug}/{project.slug}/{environment.slug}
-                            </code>
+                            <div className="flex items-center justify-between gap-2">
+                                <code className="text-xs text-muted-foreground">
+                                    {teamSlug}/{project.slug}/{environment.slug}
+                                </code>
+                                <span
+                                    className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground"
+                                    data-test="environment-variable-count"
+                                >
+                                    <KeyRound className="size-3" />
+                                    {environment.variableCount}{' '}
+                                    {environment.variableCount === 1
+                                        ? 'secret'
+                                        : 'secrets'}
+                                </span>
+                            </div>
                         </Link>
                     ))}
                 </div>

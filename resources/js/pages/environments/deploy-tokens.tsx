@@ -1,6 +1,7 @@
 import { Form, Head, router, usePage } from '@inertiajs/react';
 import { Download, KeyRound, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import Code from '@/components/code';
 import CopyButton from '@/components/copy-button';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
@@ -26,6 +27,7 @@ type DeployTokenRow = {
     name: string;
     clientId: string;
     scopes: string[];
+    useCount: number;
     lastUsedAt: string | null;
     revokedAt: string | null;
     createdAt: string | null;
@@ -96,6 +98,24 @@ function downloadEnvFile(
     document.body.removeChild(link);
 
     URL.revokeObjectURL(url);
+}
+
+/**
+ * Describe how hard a token has been leaned on. Uses from before the counter
+ * existed are not in the count, so a token can have a moment without a number.
+ */
+function formatUsage(count: number, lastUsedAt: string | null): string {
+    if (!lastUsedAt) {
+        return 'Never used';
+    }
+
+    const moment = new Date(lastUsedAt).toLocaleString();
+
+    if (count === 0) {
+        return `Last used ${moment}`;
+    }
+
+    return `Used ${count} ${count === 1 ? 'time' : 'times'} · last ${moment}`;
 }
 
 export default function DeployTokens({
@@ -239,10 +259,7 @@ export default function DeployTokens({
 
                         <p className="text-sm text-muted-foreground">
                             Put it on the deploy server, then run{' '}
-                            <code className="font-mono">
-                                kluis pull --constructive --out .env
-                            </code>
-                            .
+                            <Code>kluis pull --constructive --out .env</Code>.
                         </p>
                     </div>
                 ) : null}
@@ -275,13 +292,16 @@ export default function DeployTokens({
                                             </Badge>
                                         ) : null}
                                     </div>
-                                    <p className="font-mono text-xs text-muted-foreground">
-                                        {token.clientId}
+                                    <p className="mt-1">
+                                        <Code className="text-xs text-muted-foreground">
+                                            {token.clientId}
+                                        </Code>
                                     </p>
                                     <p className="text-sm text-muted-foreground">
-                                        {token.lastUsedAt
-                                            ? `Last used ${new Date(token.lastUsedAt).toLocaleString()}`
-                                            : 'Never used'}
+                                        {formatUsage(
+                                            token.useCount,
+                                            token.lastUsedAt,
+                                        )}
                                     </p>
                                 </div>
 

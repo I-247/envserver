@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -67,6 +68,20 @@ class Project extends Model
     public function environments(): HasMany
     {
         return $this->hasMany(Environment::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    /**
+     * Get every deploy token issued across the project's environments.
+     *
+     * A deploy token's last_used_at is the moment a server actually pulled
+     * this project's variables, so the newest one across the project is the
+     * closest thing we have to "last deployed".
+     *
+     * @return HasManyThrough<DeployToken, Environment, $this>
+     */
+    public function deployTokens(): HasManyThrough
+    {
+        return $this->hasManyThrough(DeployToken::class, Environment::class);
     }
 
     /**

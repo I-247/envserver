@@ -7,6 +7,9 @@ import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import InviteMemberModal from '@/components/invite-member-modal';
 import RemoveMemberModal from '@/components/remove-member-modal';
+import TeamIpAllowList from '@/components/team-ip-allowlist';
+import TeamRotationPolicy from '@/components/team-rotation-policy';
+import TeamTwoFactorRequirement from '@/components/team-two-factor-requirement';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,6 +27,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import WebhookEndpoints from '@/components/webhook-endpoints';
 import { useInitials } from '@/hooks/use-initials';
 import { edit, index, update } from '@/routes/teams';
 import { update as updateMember } from '@/routes/teams/members';
@@ -33,6 +37,8 @@ import type {
     TeamInvitation,
     TeamMember,
     TeamPermissions,
+    WebhookEndpointSummary,
+    WebhookOption,
 } from '@/types';
 
 type Props = {
@@ -41,6 +47,11 @@ type Props = {
     invitations: TeamInvitation[];
     permissions: TeamPermissions;
     availableRoles: RoleOption[];
+    webhooks: WebhookEndpointSummary[];
+    webhookKinds: WebhookOption[];
+    webhookEvents: WebhookOption[];
+    /** Flashed once by the controller, right after an endpoint is added. */
+    webhookSecret?: string | null;
 };
 
 export default function TeamEdit({
@@ -49,6 +60,10 @@ export default function TeamEdit({
     invitations,
     permissions,
     availableRoles,
+    webhooks,
+    webhookKinds,
+    webhookEvents,
+    webhookSecret,
 }: Props) {
     const getInitials = useInitials();
 
@@ -143,6 +158,24 @@ export default function TeamEdit({
                         </>
                     )}
                 </div>
+
+                {permissions.canUpdateTeam ? (
+                    <>
+                        <TeamTwoFactorRequirement team={team} />
+
+                        <TeamIpAllowList team={team} />
+
+                        <TeamRotationPolicy team={team} />
+
+                        <WebhookEndpoints
+                            team={team}
+                            endpoints={webhooks}
+                            kinds={webhookKinds}
+                            events={webhookEvents}
+                            newSecret={webhookSecret}
+                        />
+                    </>
+                ) : null}
 
                 <div className="space-y-6">
                     <div className="flex items-center justify-between">

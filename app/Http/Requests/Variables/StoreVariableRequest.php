@@ -22,6 +22,7 @@ class StoreVariableRequest extends FormRequest
             'key' => ['required', 'string', 'max:255', 'regex:/\A[A-Za-z_][A-Za-z0-9_]*\z/'],
             'value' => ['present', 'string'],
             'description' => ['nullable', 'string', 'max:255'],
+            'rotate_after_days' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:3650'],
         ];
     }
 

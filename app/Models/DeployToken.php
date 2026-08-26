@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Binds an OAuth client credentials client to exactly one environment.
@@ -19,6 +20,7 @@ use Illuminate\Support\Carbon;
  * @property string $oauth_client_id
  * @property string $name
  * @property list<string> $scopes
+ * @property int $use_count
  * @property int|null $created_by
  * @property Carbon|null $last_used_at
  * @property Carbon|null $expires_at
@@ -31,6 +33,18 @@ use Illuminate\Support\Carbon;
 #[Fillable(['environment_id', 'oauth_client_id', 'name', 'scopes', 'created_by', 'expires_at'])]
 class DeployToken extends Model
 {
+    /**
+     * The model's default attribute values.
+     *
+     * Mirrors the column default so a freshly created token reports zero uses
+     * instead of null before it has been read back from the database.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'use_count' => 0,
+    ];
+
     /**
      * Get the environment this token may read.
      *
@@ -85,10 +99,17 @@ class DeployToken extends Model
 
     /**
      * Record that the token was just used, without touching updated_at.
+     *
+     * The counter is incremented in the same statement so it can never drift
+     * from last_used_at, and in SQL rather than in PHP so two deploys landing
+     * at once do not overwrite each other's count.
      */
     public function markUsed(): void
     {
-        $this->newQuery()->whereKey($this->getKey())->update(['last_used_at' => now()]);
+        $this->newQuery()->whereKey($this->getKey())->update([
+            'last_used_at' => now(),
+            'use_count' => DB::raw('use_count + 1'),
+        ]);
     }
 
     /**
@@ -100,6 +121,7 @@ class DeployToken extends Model
     {
         return [
             'scopes' => 'array',
+            'use_count' => 'integer',
             'last_used_at' => 'datetime',
             'expires_at' => 'datetime',
             'revoked_at' => 'datetime',

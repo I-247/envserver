@@ -176,3 +176,18 @@ it('records when the token was last used', function () {
 
     expect($token->model->fresh()->last_used_at)->not->toBeNull();
 });
+
+it('counts every use of the token', function () {
+    seedVariable('A', '1');
+    app(PublishRelease::class)->handle($this->environment, $this->user);
+
+    $token = issueDeployToken();
+    expect($token->model->use_count)->toBe(0);
+
+    $accessToken = accessTokenFor($token);
+
+    $this->withToken($accessToken)->getJson('/api/v1/deploy/release')->assertOk();
+    $this->withToken($accessToken)->getJson('/api/v1/deploy/release')->assertOk();
+
+    expect($token->model->fresh()->use_count)->toBe(2);
+});

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Actions\Variables\ResolveEnvironmentVariables;
 use App\Data\ResolvedVariable;
+use App\Support\IpAllowList;
 use Database\Factories\EnvironmentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Collection;
@@ -13,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * @property int $id
@@ -20,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property string $slug
  * @property bool $auto_publish
+ * @property list<string>|null $ip_allowlist
  * @property int $sort_order
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -28,7 +31,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Release> $releases
  * @property-read Collection<int, DeployToken> $deployTokens
  */
-#[Fillable(['name', 'slug', 'auto_publish', 'sort_order'])]
+#[Fillable(['name', 'slug', 'auto_publish', 'ip_allowlist', 'sort_order'])]
 class Environment extends Model
 {
     /** @use HasFactory<EnvironmentFactory> */
@@ -48,6 +51,26 @@ class Environment extends Model
         ['name' => 'Staging', 'slug' => 'staging', 'auto_publish' => true],
         ['name' => 'Production', 'slug' => 'production', 'auto_publish' => false],
     ];
+
+    /**
+     * Generate a slug that is unique within the given project.
+     *
+     * Like a project's slug this is only assigned on creation and never
+     * regenerated: the slug ends up in a deploy token's URL and in the CLI's
+     * configuration, so renaming an environment must not move it.
+     */
+    public static function generateUniqueSlug(Project $project, string $name): string
+    {
+        $base = Str::slug($name) ?: 'environment';
+        $slug = $base;
+        $suffix = 1;
+
+        while (static::query()->where('project_id', $project->id)->where('slug', $slug)->exists()) {
+            $slug = $base.'-'.++$suffix;
+        }
+
+        return $slug;
+    }
 
     /**
      * Get the project that owns the environment.
@@ -129,6 +152,18 @@ class Environment extends Model
     }
 
     /**
+     * Get the addresses a deploy token for this environment may pull from.
+     *
+     * Empty means unrestricted. The list guards machine access only: people
+     * reading the environment in the browser or with the CLI are already
+     * covered by the sign in allow lists.
+     */
+    public function ipAllowList(): IpAllowList
+    {
+        return IpAllowList::make($this->ip_allowlist);
+    }
+
+    /**
      * Get the route key for the model.
      */
     public function getRouteKeyName(): string
@@ -145,6 +180,7 @@ class Environment extends Model
     {
         return [
             'auto_publish' => 'boolean',
+            'ip_allowlist' => 'array',
         ];
     }
 }

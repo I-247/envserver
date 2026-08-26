@@ -1,9 +1,17 @@
 <?php
 
+use App\Actions\Releases\PublishRelease;
+use App\Actions\Variables\AttachVariableToEnvironment;
+use App\Actions\Variables\CreateVariable;
+use App\Enums\AuditAction;
 use App\Enums\TeamRole;
+use App\Models\DeployToken;
 use App\Models\Environment;
 use App\Models\Project;
 use App\Models\Team;
+use App\Models\Variable;
+use Carbon\CarbonInterface;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 
 it('requires authentication', function () {
@@ -115,6 +123,87 @@ it('lets an admin delete a project', function () {
     expect($project->fresh())->toBeNull();
 });
 
+it('removes variables that the deleted project leaves behind', function () {
+    $team = Team::factory()->create();
+    actingAsTeamMember(TeamRole::Admin, $team);
+
+    $project = Project::factory()->for($team)->create();
+    $environment = Environment::factory()->for($project)->create();
+
+    $orphan = app(CreateVariable::class)->handle($team, 'ONLY_HERE', 'secret');
+    app(AttachVariableToEnvironment::class)->handle($orphan, $environment);
+
+    $this->delete(route('projects.destroy', ['current_team' => $team->slug, 'project' => $project->slug]))
+        ->assertRedirect();
+
+    expect(Variable::find($orphan->id))->toBeNull();
+
+    $this->assertDatabaseHas('audit_events', [
+        'team_id' => $team->id,
+        'action' => AuditAction::ProjectDeleted->value,
+    ]);
+});
+
+it('keeps a variable that another project still uses', function () {
+    $team = Team::factory()->create();
+    actingAsTeamMember(TeamRole::Admin, $team);
+
+    $doomed = Project::factory()->for($team)->create();
+    $survivor = Project::factory()->for($team)->create();
+    $doomedEnvironment = Environment::factory()->for($doomed)->create();
+    $survivingEnvironment = Environment::factory()->for($survivor)->create();
+
+    $shared = app(CreateVariable::class)->handle($team, 'SHARED_KEY', 'secret');
+    app(AttachVariableToEnvironment::class)->handle($shared, $doomedEnvironment);
+    app(AttachVariableToEnvironment::class)->handle($shared, $survivingEnvironment);
+
+    $this->delete(route('projects.destroy', ['current_team' => $team->slug, 'project' => $doomed->slug]))
+        ->assertRedirect();
+
+    expect(Variable::find($shared->id))->not->toBeNull()
+        ->and($shared->assignments()->count())->toBe(1);
+});
+
+it('keeps a variable that a surviving release still pins', function () {
+    $team = Team::factory()->create();
+    actingAsTeamMember(TeamRole::Admin, $team);
+
+    $doomed = Project::factory()->for($team)->create();
+    $survivor = Project::factory()->for($team)->create();
+    $doomedEnvironment = Environment::factory()->for($doomed)->create();
+    $survivingEnvironment = Environment::factory()->for($survivor)->create();
+
+    $variable = app(CreateVariable::class)->handle($team, 'ONCE_SHIPPED', 'secret');
+    app(AttachVariableToEnvironment::class)->handle($variable, $doomedEnvironment);
+    app(AttachVariableToEnvironment::class)->handle($variable, $survivingEnvironment);
+
+    // The surviving environment shipped it once and then dropped it, so no
+    // assignment is left but its release still has to stay reproducible.
+    app(PublishRelease::class)->handle($survivingEnvironment);
+    $survivingEnvironment->assignments()->where('variable_id', $variable->id)->delete();
+
+    $this->delete(route('projects.destroy', ['current_team' => $team->slug, 'project' => $doomed->slug]))
+        ->assertRedirect();
+
+    expect(Variable::find($variable->id))->not->toBeNull()
+        ->and($survivingEnvironment->latestRelease()->items()->count())->toBe(1);
+});
+
+it('keeps a never assigned variable that the project never touched', function () {
+    $team = Team::factory()->create();
+    actingAsTeamMember(TeamRole::Admin, $team);
+
+    $project = Project::factory()->for($team)->create();
+    Environment::factory()->for($project)->create();
+
+    $unattached = app(CreateVariable::class)->handle($team, 'NOT_YET_USED', 'secret');
+
+    $this->delete(route('projects.destroy', ['current_team' => $team->slug, 'project' => $project->slug]))
+        ->assertRedirect();
+
+    expect(Variable::find($unattached->id))->not->toBeNull();
+});
+
 it('does not resolve a project belonging to another team', function () {
     $team = Team::factory()->create();
     actingAsTeamMember(TeamRole::Owner, $team);
@@ -147,6 +236,40 @@ it('shows a project with its environments', function () {
         );
 });
 
+it('counts the variables assigned to each environment', function () {
+    $team = Team::factory()->create();
+    actingAsTeamMember(TeamRole::Member, $team);
+    $project = Project::factory()->for($team)->create();
+    $environment = Environment::factory()->for($project)->create();
+
+    foreach (['DB_PASSWORD', 'APP_KEY'] as $key) {
+        app(AttachVariableToEnvironment::class)->handle(
+            app(CreateVariable::class)->handle($team, $key, 'secret'),
+            $environment,
+        );
+    }
+
+    $this->get(route('projects.show', ['current_team' => $team->slug, 'project' => $project->slug]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('projects/show')
+            ->where('project.environments.0.variableCount', 2)
+        );
+});
+
+it('only exposes the edit and delete permissions to a user who has them', function () {
+    $team = Team::factory()->create();
+    actingAsTeamMember(TeamRole::Member, $team);
+    $project = Project::factory()->for($team)->create();
+    Environment::factory()->for($project)->create();
+
+    $this->get(route('projects.show', ['current_team' => $team->slug, 'project' => $project->slug]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('permissions.canUpdateProject', true)
+            ->where('permissions.canDeleteProject', false)
+        );
+});
+
 it('renames a project without changing its slug', function () {
     $team = Team::factory()->create();
     actingAsTeamMember(TeamRole::Member, $team);
@@ -160,3 +283,85 @@ it('renames a project without changing its slug', function () {
         ->name->toBe('Webshop')
         ->slug->toBe('shop');
 });
+
+it('clears a project description when it is submitted empty', function () {
+    $team = Team::factory()->create();
+    actingAsTeamMember(TeamRole::Member, $team);
+    $project = Project::factory()->for($team)->create(['description' => 'Old copy']);
+
+    $this->patch(route('projects.update', ['current_team' => $team->slug, 'project' => $project->slug]), [
+        'name' => $project->name,
+        'description' => '',
+    ])->assertRedirect();
+
+    expect($project->fresh()->description)->toBeNull();
+});
+
+it('shows the most recent deploy token use as the project last deploy', function () {
+    $team = Team::factory()->create();
+    actingAsTeamMember(TeamRole::Member, $team);
+
+    $project = Project::factory()->for($team)->create();
+    $staging = Environment::factory()->for($project)->create();
+    $production = Environment::factory()->for($project)->create();
+
+    $newest = now()->subHour()->startOfSecond();
+
+    makeDeployToken($staging, now()->subDays(3), 4);
+    makeDeployToken($production, $newest, 7);
+    makeDeployToken($production, null);
+
+    $this->get(route('projects.index', ['current_team' => $team->slug]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('projects/index')
+            ->where('projects.0.lastDeployedAt', $newest->toISOString())
+            ->where('projects.0.deployCount', 11)
+        );
+});
+
+it('lists the environments of each project', function () {
+    $team = Team::factory()->create();
+    actingAsTeamMember(TeamRole::Member, $team);
+
+    $project = Project::factory()->for($team)->create();
+    $staging = Environment::factory()->for($project)->create(['name' => 'Staging']);
+    $production = Environment::factory()->for($project)->create(['name' => 'Production']);
+
+    $this->get(route('projects.index', ['current_team' => $team->slug]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('projects/index')
+            ->has('projects.0.environments', 2)
+            ->where('projects.0.environments.0.slug', $staging->slug)
+            ->where('projects.0.environments.0.name', 'Staging')
+            ->where('projects.0.environments.1.slug', $production->slug)
+        );
+});
+
+it('reports a project that was never deployed', function () {
+    $team = Team::factory()->create();
+    actingAsTeamMember(TeamRole::Member, $team);
+
+    Environment::factory()->for(Project::factory()->for($team))->create();
+
+    $this->get(route('projects.index', ['current_team' => $team->slug]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('projects/index')
+            ->where('projects.0.lastDeployedAt', null)
+            ->where('projects.0.deployCount', 0)
+        );
+});
+
+function makeDeployToken(Environment $environment, ?CarbonInterface $lastUsedAt, int $useCount = 0): DeployToken
+{
+    return DeployToken::forceCreate([
+        'environment_id' => $environment->id,
+        'oauth_client_id' => Str::uuid()->toString(),
+        'name' => 'Deployer',
+        'scopes' => ['env:read'],
+        'last_used_at' => $lastUsedAt,
+        'use_count' => $useCount,
+    ]);
+}

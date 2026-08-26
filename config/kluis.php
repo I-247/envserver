@@ -59,4 +59,50 @@ return [
 
     'cli_client_id' => env('KLUIS_CLI_CLIENT_ID'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Sign In IP Allow List
+    |--------------------------------------------------------------------------
+    |
+    | A comma separated list of IP addresses and CIDR ranges that may reach
+    | the web application at all, signing in included. Leave it empty and no
+    | restriction applies.
+    |
+    | This is the operator's net, set on the server and not editable from the
+    | interface, so a compromised account cannot widen it. Teams can narrow
+    | it further for themselves from their team settings.
+    |
+    | Example: KLUIS_IP_ALLOWLIST="203.0.113.4,10.0.0.0/8,2001:db8::/32"
+    |
+    */
+
+    'ip_allowlist' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('KLUIS_IP_ALLOWLIST', ''))
+    ))),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Trusted Proxies
+    |--------------------------------------------------------------------------
+    |
+    | Every allow list above compares against the client address Laravel sees.
+    | Behind a load balancer or a reverse proxy that address is the proxy's
+    | unless the proxy is trusted here, at which point X-Forwarded-For is
+    | believed instead.
+    |
+    | Leave this empty when the application is reached directly. Only ever
+    | name proxies you control: a trusted proxy's X-Forwarded-For header is
+    | taken at face value, and a header is something a client can write.
+    |
+    | Use "*" for a platform whose load balancer address is not fixed, such as
+    | Laravel Cloud, and only when nothing else can reach the origin.
+    |
+    */
+
+    'trusted_proxies' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('KLUIS_TRUSTED_PROXIES', ''))
+    ))),
+
 ];

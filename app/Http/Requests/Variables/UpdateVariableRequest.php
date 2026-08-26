@@ -17,6 +17,7 @@ class UpdateVariableRequest extends FormRequest
         return [
             'value' => ['sometimes', 'string'],
             'description' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'rotate_after_days' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:3650'],
             'alias_key' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:/\A[A-Za-z_][A-Za-z0-9_]*\z/'],
             'note' => ['sometimes', 'nullable', 'string', 'max:255'],
         ];

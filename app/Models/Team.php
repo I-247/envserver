@@ -4,8 +4,10 @@ namespace App\Models;
 
 use App\Concerns\GeneratesUniqueTeamSlugs;
 use App\Enums\TeamRole;
+use App\Support\IpAllowList;
 use Database\Factories\TeamFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -13,12 +15,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
+use Laravel\Fortify\Fortify;
 
 /**
  * @property int $id
  * @property string $name
  * @property string $slug
  * @property bool $is_personal
+ * @property list<string>|null $ip_allowlist
+ * @property bool $two_factor_required
+ * @property int|null $default_rotate_after_days
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -29,7 +35,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Variable> $variables
  * @property-read Collection<int, User> $members
  */
-#[Fillable(['name', 'slug', 'is_personal'])]
+#[Fillable(['name', 'slug', 'is_personal', 'ip_allowlist', 'two_factor_required', 'default_rotate_after_days'])]
 class Team extends Model
 {
     /** @use HasFactory<TeamFactory> */
@@ -150,6 +156,16 @@ class Team extends Model
     }
 
     /**
+     * Get the endpoints this team sends its audit events to.
+     *
+     * @return HasMany<WebhookEndpoint, $this>
+     */
+    public function webhookEndpoints(): HasMany
+    {
+        return $this->hasMany(WebhookEndpoint::class)->orderBy('name');
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -158,7 +174,38 @@ class Team extends Model
     {
         return [
             'is_personal' => 'boolean',
+            'ip_allowlist' => 'array',
+            'two_factor_required' => 'boolean',
+            'default_rotate_after_days' => 'integer',
         ];
+    }
+
+    /**
+     * Get the addresses this team may be reached from.
+     *
+     * An empty list means the team adds no restriction of its own; the
+     * operator's list in config still applies either way.
+     */
+    public function ipAllowList(): IpAllowList
+    {
+        return IpAllowList::make($this->ip_allowlist);
+    }
+
+    /**
+     * Get the members who cannot reach this team while it requires a second factor.
+     *
+     * Mirrors User::hasSecondFactor() as a query, Fortify's confirmation
+     * setting included, so the two never disagree about who is enrolled.
+     *
+     * @return BelongsToMany<User, $this, Membership, 'pivot'>
+     */
+    public function membersWithoutSecondFactor(): BelongsToMany
+    {
+        return $this->members()
+            ->where(fn (Builder $query) => Fortify::confirmsTwoFactorAuthentication()
+                ? $query->whereNull('users.two_factor_confirmed_at')
+                : $query->whereNull('users.two_factor_secret'))
+            ->whereDoesntHave('passkeys');
     }
 
     /**

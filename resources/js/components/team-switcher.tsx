@@ -1,5 +1,6 @@
 import { router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, Plus, Users } from 'lucide-react';
+import { Check, ChevronsUpDown, Plus } from 'lucide-react';
+import AppLogoIcon from '@/components/app-logo-icon';
 import CreateTeamModal from '@/components/create-team-modal';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,6 +11,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { SidebarMenuButton } from '@/components/ui/sidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { switchMethod } from '@/routes/teams';
 import type { Team } from '@/types';
@@ -23,6 +25,7 @@ export function TeamSwitcher({ inHeader = false }: TeamSwitcherProps) {
     const isMobile = useIsMobile();
     const currentTeam = page.props.currentTeam;
     const teams = page.props.teams ?? [];
+    const appName = page.props.name;
 
     const switchTeam = (team: Team) => {
         const previousTeamSlug = currentTeam?.slug;
@@ -54,47 +57,39 @@ export function TeamSwitcher({ inHeader = false }: TeamSwitcherProps) {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button
-                    variant="ghost"
-                    data-test="team-switcher-trigger"
-                    className={
-                        inHeader
-                            ? 'h-8 gap-1 px-2'
-                            : 'w-full justify-start px-2 has-[>svg]:px-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
-                    }
-                >
-                    <Users
-                        className={
-                            inHeader
-                                ? 'hidden'
-                                : 'hidden size-4 shrink-0 group-data-[collapsible=icon]:block'
-                        }
-                    />
-                    <div
-                        className={
-                            inHeader
-                                ? 'grid flex-1 text-left text-sm leading-tight'
-                                : 'grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden'
-                        }
+                {inHeader ? (
+                    <Button
+                        variant="ghost"
+                        data-test="team-switcher-trigger"
+                        className="h-8 gap-1 px-2"
                     >
-                        <span
-                            className={
-                                inHeader
-                                    ? 'max-w-[120px] truncate font-medium'
-                                    : 'truncate font-semibold'
-                            }
-                        >
-                            {currentTeam?.name ?? 'Select team'}
-                        </span>
-                    </div>
-                    <ChevronsUpDown
-                        className={
-                            inHeader
-                                ? 'size-4 opacity-50'
-                                : 'ml-auto group-data-[collapsible=icon]:hidden'
-                        }
-                    />
-                </Button>
+                        <div className="grid flex-1 text-left text-sm leading-tight">
+                            <span className="max-w-[120px] truncate font-medium">
+                                {currentTeam?.name ?? 'Select team'}
+                            </span>
+                        </div>
+                        <ChevronsUpDown className="size-4 opacity-50" />
+                    </Button>
+                ) : (
+                    <SidebarMenuButton
+                        size="lg"
+                        data-test="team-switcher-trigger"
+                        className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                    >
+                        <div className="flex aspect-square size-8 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
+                            <AppLogoIcon className="size-5 fill-current text-white dark:text-black" />
+                        </div>
+                        <div className="grid flex-1 text-left text-sm leading-tight">
+                            <span className="truncate font-semibold">
+                                {appName}
+                            </span>
+                            <span className="truncate text-xs text-muted-foreground">
+                                {currentTeam?.name ?? 'Select team'}
+                            </span>
+                        </div>
+                        <ChevronsUpDown className="ml-auto size-4" />
+                    </SidebarMenuButton>
+                )}
             </DropdownMenuTrigger>
             <DropdownMenuContent
                 className={

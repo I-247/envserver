@@ -3,8 +3,10 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"os"
+
+	"github.com/sebastiaankloos/kluis/cli/internal/ui"
 )
 
 // version is set at build time by GoReleaser.
@@ -12,7 +14,16 @@ var version = "dev"
 
 func main() {
 	if err := rootCommand().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "kluis:", err)
+		// A command that already reported its own outcome carries the exit
+		// code it wants and nothing more to say. "kluis check" is the one
+		// doing that today: printing an error under its own report would
+		// read as a second, different problem.
+		var coded interface{ ExitCode() int }
+		if errors.As(err, &coded) {
+			os.Exit(coded.ExitCode())
+		}
+
+		ui.New(os.Stdout, os.Stderr).Error("%s", err)
 		os.Exit(1)
 	}
 }

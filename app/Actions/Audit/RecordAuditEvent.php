@@ -2,6 +2,7 @@
 
 namespace App\Actions\Audit;
 
+use App\Actions\Webhooks\DispatchAuditWebhooks;
 use App\Enums\AuditAction;
 use App\Models\AuditEvent;
 use App\Models\Team;
@@ -18,6 +19,8 @@ use Illuminate\Support\Facades\Request;
  */
 class RecordAuditEvent
 {
+    public function __construct(private readonly DispatchAuditWebhooks $webhooks) {}
+
     /**
      * Record an action.
      *
@@ -45,6 +48,11 @@ class RecordAuditEvent
         }
 
         $event->save();
+
+        // Anything worth writing down is worth telling the team about, if
+        // they asked. Deliveries are queued, so an endpoint that is slow or
+        // gone cannot hold up the action that was just recorded.
+        $this->webhooks->handle($event);
 
         return $event;
     }

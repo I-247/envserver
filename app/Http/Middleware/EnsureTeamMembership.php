@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Concerns\ResolvesRequestTeam;
 use App\Enums\TeamRole;
 use App\Models\Team;
 use App\Models\User;
@@ -11,6 +12,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureTeamMembership
 {
+    use ResolvesRequestTeam;
+
     /**
      * Handle an incoming request.
      *
@@ -50,19 +53,5 @@ class EnsureTeamMembership
             ! $role->isAtLeast($requiredRole),
             403,
         );
-    }
-
-    /**
-     * Get the team associated with the request.
-     */
-    protected function team(Request $request): ?Team
-    {
-        $team = $request->route('current_team') ?? $request->route('team');
-
-        if (is_string($team)) {
-            $team = Team::where('slug', $team)->first();
-        }
-
-        return $team;
     }
 }

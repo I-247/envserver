@@ -31,9 +31,23 @@ it('lists the environment\'s deploy tokens without any secret', function () {
         ->has('tokens', 1)
         ->where('tokens.0.name', 'Ploi production')
         ->where('tokens.0.lastUsedAt', null)
+        ->where('tokens.0.useCount', 0)
     );
 
     expect($response->getContent())->not->toContain('client_secret');
+});
+
+it('reports how often a token has been used', function () {
+    actingAsTeamMember(TeamRole::Admin, $this->team);
+    $token = app(CreateDeployToken::class)->handle($this->environment, 'Ploi production');
+
+    $token->model->markUsed();
+    $token->model->markUsed();
+
+    $this->get(tokensUrl())->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->component('environments/deploy-tokens')
+        ->where('tokens.0.useCount', 2)
+    );
 });
 
 it('shows the secret exactly once, right after creating the token', function () {

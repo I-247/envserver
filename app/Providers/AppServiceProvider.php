@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Actions\Releases\PublishAutomaticReleases;
 use App\Contracts\SecretCipher;
 use App\Cryptography\AesGcmSecretCipher;
 use App\Enums\ApiScope;
@@ -22,6 +23,11 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(SecretCipher::class, AesGcmSecretCipher::class);
+
+        // Shared so that an open batch is visible to the actions nested inside
+        // it: without one instance, PushVariables would hold back releases that
+        // UpdateVariableValue's own copy of the action happily publishes.
+        $this->app->scoped(PublishAutomaticReleases::class);
     }
 
     /**

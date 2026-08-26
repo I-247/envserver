@@ -38,6 +38,7 @@ class DeployTokenController extends Controller
                     'name' => $token->name,
                     'clientId' => $token->oauth_client_id,
                     'scopes' => $token->scopes,
+                    'useCount' => $token->use_count,
                     'lastUsedAt' => $token->last_used_at?->toISOString(),
                     'revokedAt' => $token->revoked_at?->toISOString(),
                     'createdAt' => $token->created_at?->toISOString(),

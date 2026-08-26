@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\Release;
 use App\Models\Team;
 use App\Models\Variable;
+use Illuminate\Http\Response;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -258,5 +259,17 @@ describe('revealing a value', function () {
 
         $this->getJson(portalUrl("/variables/{$variable->id}/reveal"))
             ->assertForbidden();
+    });
+
+    it('stops someone walking through every value one request at a time', function () {
+        actingAsTeamMember(TeamRole::Member, $this->team);
+        $variable = portalVariable('A', 'super-secret-value');
+
+        foreach (range(1, 20) as $ignored) {
+            $this->getJson(portalUrl("/variables/{$variable->id}/reveal"))->assertOk();
+        }
+
+        $this->getJson(portalUrl("/variables/{$variable->id}/reveal"))
+            ->assertStatus(Response::HTTP_TOO_MANY_REQUESTS);
     });
 });

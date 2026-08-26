@@ -44,6 +44,18 @@ class User extends Authenticatable implements OAuthenticatable, PasskeyUser
     use HasApiTokens, HasFactory, HasTeams, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
 
     /**
+     * Determine if the user has a second factor available on their account.
+     *
+     * A passkey counts: it is bound to hardware and phishing resistant, so a
+     * team that demands a second factor is satisfied either way. This asks
+     * what the account is enrolled in, not how this session signed in.
+     */
+    public function hasSecondFactor(): bool
+    {
+        return $this->hasEnabledTwoFactorAuthentication() || $this->passkeys()->exists();
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

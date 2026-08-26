@@ -12,7 +12,24 @@ import (
 	"github.com/sebastiaankloos/kluis/cli/internal/api"
 	"github.com/sebastiaankloos/kluis/cli/internal/auth"
 	"github.com/sebastiaankloos/kluis/cli/internal/config"
+	"github.com/sebastiaankloos/kluis/cli/internal/ui"
 )
+
+// noColour is set by --no-color. Colour is otherwise decided per stream, so
+// this flag only ever takes it away, never forces it on.
+var noColour bool
+
+// printer builds the renderer for a command, bound to that command's streams
+// so tests can capture what was written.
+func printer(cmd *cobra.Command) *ui.Printer {
+	p := ui.New(cmd.OutOrStdout(), cmd.ErrOrStderr())
+
+	if noColour {
+		p.SetColour(false)
+	}
+
+	return p
+}
 
 func rootCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -25,6 +42,8 @@ func rootCommand() *cobra.Command {
 		SilenceErrors: true,
 	}
 
+	cmd.PersistentFlags().BoolVar(&noColour, "no-color", false, "never colour the output")
+
 	cmd.AddCommand(
 		loginCommand(),
 		logoutCommand(),
@@ -33,9 +52,12 @@ func rootCommand() *cobra.Command {
 		pullCommand(),
 		pushCommand(),
 		diffCommand(),
+		checkCommand(),
 		listCommand(),
 		historyCommand(),
 		runCommand(),
+		sealCommand(),
+		unsealCommand(),
 	)
 
 	return cmd

@@ -126,7 +126,7 @@ func TestMergeOnlyUpdatesKnownKeysByDefault(t *testing.T) {
 		"APP_ENV": "production",
 		"NEW_ONE": "value",
 		"DB_HOST": "127.0.0.1",
-	}, false)
+	}, MergeOptions{})
 
 	if result.Updated != 1 || result.Added != 0 || result.Skipped != 1 || result.Unchanged != 1 {
 		t.Fatalf("unexpected result %#v", result)
@@ -140,7 +140,7 @@ func TestMergeOnlyUpdatesKnownKeysByDefault(t *testing.T) {
 func TestMergeAddsUnknownKeysWhenConstructive(t *testing.T) {
 	file := Parse("APP_ENV=local\n")
 
-	result := file.Merge(map[string]string{"APP_ENV": "production", "NEW_ONE": "value"}, true)
+	result := file.Merge(map[string]string{"APP_ENV": "production", "NEW_ONE": "value"}, MergeOptions{Constructive: true})
 
 	if result.Added != 1 || result.Updated != 1 {
 		t.Fatalf("unexpected result %#v", result)
@@ -154,7 +154,7 @@ func TestMergeAddsUnknownKeysWhenConstructive(t *testing.T) {
 func TestMergeNeverRemovesLocalOnlyKeys(t *testing.T) {
 	file := Parse("APP_ENV=local\nLOCAL_ONLY=keep-me\n")
 
-	file.Merge(map[string]string{"APP_ENV": "production"}, true)
+	file.Merge(map[string]string{"APP_ENV": "production"}, MergeOptions{Constructive: true})
 
 	if got, ok := file.Get("LOCAL_ONLY"); !ok || got != "keep-me" {
 		t.Fatal("a pull must never delete a key that only exists locally")
@@ -204,7 +204,7 @@ func TestSetCollapsesDuplicateKeys(t *testing.T) {
 func TestMergeLeavesNoShadowedDuplicate(t *testing.T) {
 	file := Parse("APP_ENV=first\nAPP_ENV=stale\n")
 
-	file.Merge(map[string]string{"APP_ENV": "production"}, false)
+	file.Merge(map[string]string{"APP_ENV": "production"}, MergeOptions{})
 
 	if got, _ := Parse(file.String()).Get("APP_ENV"); got != "production" {
 		t.Fatalf("after merge the effective value is %q, want %q", got, "production")
@@ -214,5 +214,100 @@ func TestMergeLeavesNoShadowedDuplicate(t *testing.T) {
 func TestKeysReportsADuplicateOnce(t *testing.T) {
 	if got := Parse("A=1\nA=2\nB=3\n").Keys(); !reflect.DeepEqual(got, []string{"A", "B"}) {
 		t.Fatalf("Keys() = %v", got)
+	}
+}
+
+func TestPlanReportsWithoutTouchingTheFile(t *testing.T) {
+	const source = "APP_ENV=local\nAPP_KEY=same\n"
+
+	file := Parse(source)
+
+	plan := Plan(file, map[string]string{
+		"APP_ENV": "production",
+		"APP_KEY": "same",
+		"NEW_ONE": "value",
+	}, MergeOptions{})
+
+	if plan.Updated != 1 || plan.Unchanged != 1 || plan.Skipped != 1 || plan.Added != 0 {
+		t.Fatalf("unexpected plan %+v", plan)
+	}
+
+	want := []Change{
+		{Key: "APP_ENV", Kind: KindUpdated},
+		{Key: "APP_KEY", Kind: KindUnchanged},
+		{Key: "NEW_ONE", Kind: KindSkipped},
+	}
+
+	if len(plan.Changes) != len(want) {
+		t.Fatalf("got %d changes, want %d", len(plan.Changes), len(want))
+	}
+
+	for i, change := range plan.Changes {
+		if change != want[i] {
+			t.Errorf("change %d = %+v, want %+v", i, change, want[i])
+		}
+	}
+
+	if got := file.String(); got != source {
+		t.Errorf("Plan rewrote the file:\n%s", got)
+	}
+}
+
+func TestPlanMatchesWhatMergeDoes(t *testing.T) {
+	values := map[string]string{"APP_ENV": "production", "NEW_ONE": "value"}
+
+	plan := Plan(Parse("APP_ENV=local\n"), values, MergeOptions{Constructive: true})
+	result := Parse("APP_ENV=local\n").Merge(values, MergeOptions{Constructive: true})
+
+	if plan.Updated != result.Updated || plan.Added != result.Added ||
+		plan.Unchanged != result.Unchanged || plan.Skipped != result.Skipped {
+		t.Fatalf("plan %+v does not match merge %+v", plan, result)
+	}
+}
+
+func TestPruneRemovesLocalOnlyKeys(t *testing.T) {
+	file := Parse("# database\nAPP_ENV=local\nOLD_ONE=gone\n\nDB_HOST=127.0.0.1\n")
+
+	result := file.Merge(map[string]string{
+		"APP_ENV": "production",
+		"DB_HOST": "127.0.0.1",
+	}, MergeOptions{Prune: true})
+
+	if result.Removed != 1 || result.Updated != 1 || result.Unchanged != 1 {
+		t.Fatalf("unexpected result %#v", result)
+	}
+
+	got := file.String()
+
+	if strings.Contains(got, "OLD_ONE") {
+		t.Errorf("OLD_ONE survived the prune:\n%s", got)
+	}
+
+	if !strings.Contains(got, "# database") {
+		t.Errorf("the comment was taken along with the key:\n%s", got)
+	}
+}
+
+func TestPruneIsOffByDefault(t *testing.T) {
+	file := Parse("LOCAL_ONLY=mine\n")
+
+	result := file.Merge(map[string]string{"APP_ENV": "production"}, MergeOptions{Constructive: true})
+
+	if result.Removed != 0 {
+		t.Fatalf("removed %d keys without --prune", result.Removed)
+	}
+
+	if !strings.Contains(file.String(), "LOCAL_ONLY") {
+		t.Error("a constructive merge deleted a local only key")
+	}
+}
+
+func TestUnsetRemovesEveryDuplicate(t *testing.T) {
+	file := Parse("APP_ENV=local\nOTHER=keep\nAPP_ENV=again\n")
+
+	file.Unset("APP_ENV")
+
+	if got := file.String(); got != "OTHER=keep\n" {
+		t.Errorf("got %q", got)
 	}
 }

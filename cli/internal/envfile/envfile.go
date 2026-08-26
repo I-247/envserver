@@ -38,6 +38,46 @@ type MergeResult struct {
 	Updated   int
 	Unchanged int
 	Skipped   int // present remotely, absent locally, and not added
+	Removed   int // present locally, absent remotely, and pruned
+
+	// Changes is the per key decision the counters summarise, in key order.
+	Changes []Change
+}
+
+// ChangeKind is what a merge decides to do with a single key.
+type ChangeKind int
+
+const (
+	// KindUnchanged means the local value already equals the remote one.
+	KindUnchanged ChangeKind = iota
+	// KindUpdated means the key exists locally and gets the remote value.
+	KindUpdated
+	// KindAdded means the key is absent locally and is written.
+	KindAdded
+	// KindSkipped means the key is absent locally and a conservative merge
+	// leaves it out.
+	KindSkipped
+	// KindRemoved means the key exists only locally and pruning deletes it.
+	KindRemoved
+)
+
+// MergeOptions turns the safe default merge into a wider one.
+//
+// The zero value is the conservative pull: update what is already there,
+// invent nothing, delete nothing.
+type MergeOptions struct {
+	// Constructive also writes keys the file does not have yet.
+	Constructive bool
+	// Prune deletes keys the file has and the release does not. Destructive
+	// by nature, since a .env legitimately holds local only entries, so it is
+	// never implied by Constructive.
+	Prune bool
+}
+
+// Change is one key's fate in a merge.
+type Change struct {
+	Key  string
+	Kind ChangeKind
 }
 
 // Parse reads the contents of a .env file.
@@ -134,34 +174,105 @@ func (f *File) Set(key, value string) {
 	}
 }
 
+// Unset removes a key entirely, including any duplicate assignment of it.
+//
+// Comments and blank lines around it are left alone: they were written by a
+// person about that part of the file, and a pull is not the right moment to
+// decide they are now stale.
+func (f *File) Unset(key string) {
+	kept := f.lines[:0]
+
+	for _, l := range f.lines {
+		if l.key != key {
+			kept = append(kept, l)
+		}
+	}
+
+	f.lines = kept
+}
+
 // Merge applies remote values to the file.
 //
 // By default only keys that already exist locally are updated. That is the
 // safe direction: a .env usually holds machine specific entries nobody wants
 // a pull to invent, and a key you never asked for appearing in your file is
-// more surprising than one that stays behind. Pass constructive to add the
-// rest. Either way, keys that exist only locally are never removed.
-func (f *File) Merge(values map[string]string, constructive bool) MergeResult {
-	result := MergeResult{}
+// more surprising than one that stays behind. MergeOptions widens it in
+// either direction.
+func (f *File) Merge(values map[string]string, options MergeOptions) MergeResult {
+	result := Plan(f, values, options)
 
-	for _, key := range sortedKeys(values) {
-		current, exists := f.Get(key)
-
-		switch {
-		case exists && current == values[key]:
-			result.Unchanged++
-		case exists:
-			f.Set(key, values[key])
-			result.Updated++
-		case constructive:
-			f.Set(key, values[key])
-			result.Added++
-		default:
-			result.Skipped++
+	for _, change := range result.Changes {
+		switch change.Kind {
+		case KindUpdated, KindAdded:
+			f.Set(change.Key, values[change.Key])
+		case KindRemoved:
+			f.Unset(change.Key)
+		case KindUnchanged, KindSkipped:
 		}
 	}
 
 	return result
+}
+
+// Plan decides what Merge would do without touching the file.
+//
+// Deliberately the same decision code as Merge rather than a second reading
+// of the rules: a dry run that disagrees with the real thing is worse than no
+// dry run at all.
+func Plan(f *File, values map[string]string, options MergeOptions) MergeResult {
+	result := MergeResult{Changes: make([]Change, 0, len(values))}
+
+	for _, key := range mergeKeys(f, values, options.Prune) {
+		remote, onServer := values[key]
+		current, exists := f.Get(key)
+
+		var kind ChangeKind
+
+		switch {
+		case !onServer:
+			kind = KindRemoved
+			result.Removed++
+		case exists && current == remote:
+			kind = KindUnchanged
+			result.Unchanged++
+		case exists:
+			kind = KindUpdated
+			result.Updated++
+		case options.Constructive:
+			kind = KindAdded
+			result.Added++
+		default:
+			kind = KindSkipped
+			result.Skipped++
+		}
+
+		result.Changes = append(result.Changes, Change{Key: key, Kind: kind})
+	}
+
+	return result
+}
+
+// mergeKeys lists every key a merge has to decide about, in key order.
+//
+// Local only keys join the list only when pruning: without it they are not a
+// decision at all, and reporting them as "unchanged" would suggest the
+// release knows about them.
+func mergeKeys(f *File, values map[string]string, prune bool) []string {
+	keys := sortedKeys(values)
+
+	if !prune {
+		return keys
+	}
+
+	for _, key := range f.Keys() {
+		if _, onServer := values[key]; !onServer {
+			keys = append(keys, key)
+		}
+	}
+
+	sort.Strings(keys)
+
+	return keys
 }
 
 // String renders the file back to text.

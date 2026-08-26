@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Teams;
 
 use App\Actions\Teams\CreateTeam;
+use App\Enums\AuditAction;
 use App\Enums\TeamRole;
+use App\Enums\WebhookKind;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Teams\DeleteTeamRequest;
 use App\Http\Requests\Teams\SaveTeamRequest;
 use App\Models\Membership;
 use App\Models\Team;
 use App\Models\User;
+use App\Models\WebhookEndpoint;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +59,10 @@ class TeamController extends Controller
                 'name' => $team->name,
                 'slug' => $team->slug,
                 'isPersonal' => $team->is_personal,
+                'ipAllowList' => $team->ipAllowList()->toArray(),
+                'twoFactorRequired' => $team->two_factor_required,
+                'membersWithoutSecondFactor' => $team->membersWithoutSecondFactor()->count(),
+                'defaultRotateAfterDays' => $team->default_rotate_after_days,
             ],
             'members' => $team->members()->get()->map(function (User $member) {
                 /** @var Membership $membership */
@@ -80,6 +87,27 @@ class TeamController extends Controller
                     'role_label' => $invitation->role->label(),
                     'created_at' => $invitation->created_at->toISOString(),
                 ]),
+            'webhooks' => $team->webhookEndpoints()->get()->map(fn (WebhookEndpoint $endpoint) => [
+                'id' => $endpoint->id,
+                'name' => $endpoint->name,
+                'kind' => $endpoint->kind->value,
+                'kindLabel' => $endpoint->kind->label(),
+                'url' => $endpoint->maskedUrl(),
+                'events' => $endpoint->events ?? [],
+                'active' => $endpoint->active,
+                'lastAttemptedAt' => $endpoint->last_attempted_at?->toISOString(),
+                'lastStatus' => $endpoint->last_status,
+                'lastError' => $endpoint->last_error,
+                'consecutiveFailures' => $endpoint->consecutive_failures,
+            ]),
+            'webhookKinds' => array_map(
+                fn (WebhookKind $kind) => ['value' => $kind->value, 'label' => $kind->label()],
+                WebhookKind::cases(),
+            ),
+            'webhookEvents' => array_map(
+                fn (AuditAction $action) => ['value' => $action->value, 'label' => $action->label()],
+                AuditAction::cases(),
+            ),
             'permissions' => $user->toTeamPermissions($team),
             'availableRoles' => TeamRole::assignable(),
         ]);

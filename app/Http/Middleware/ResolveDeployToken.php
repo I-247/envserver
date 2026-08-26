@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Actions\Audit\RecordAuditEvent;
+use App\Enums\AuditAction;
 use App\Models\DeployToken;
 use Closure;
 use Illuminate\Http\Request;
@@ -44,11 +46,42 @@ class ResolveDeployToken extends ValidateToken
             abort_unless($deployToken->allows($scope), 403);
         }
 
+        $this->ensureAddressIsAllowed($request, $deployToken);
+
         $deployToken->markUsed();
 
         $request->attributes->set('deploy_token', $deployToken);
 
         return $next($request);
+    }
+
+    /**
+     * Keep the token on the allow list its environment configured, if any.
+     *
+     * This is the last gate rather than the first: rejecting an address is
+     * only worth auditing once the token behind it is known, and a blocked
+     * pull from a production environment is a signal a team wants to see.
+     */
+    protected function ensureAddressIsAllowed(Request $request, DeployToken $deployToken): void
+    {
+        $environment = $deployToken->environment;
+
+        if ($environment->ipAllowList()->allows($request->ip())) {
+            return;
+        }
+
+        app(RecordAuditEvent::class)->handle(
+            team: $environment->project->team,
+            action: AuditAction::DeployTokenBlocked,
+            subject: $deployToken,
+            metadata: [
+                'project' => $environment->project->slug,
+                'environment' => $environment->slug,
+                'token' => $deployToken->name,
+            ],
+        );
+
+        abort(403, 'This deploy token may not be used from this address.');
     }
 
     /**
