@@ -25,6 +25,9 @@ Or build it yourself:
 go install github.com/I-247/envserver/cli/cmd/envclient@latest
 ```
 
+Once it's installed, `envclient update` keeps it current — see
+[Updating](#updating) below.
+
 ## Link a project
 
 Run this once per repository and commit the result. `envclient.json` names the
@@ -163,7 +166,19 @@ token, now or after they leave, could read every commit it ever appeared in.
 `--out`. Prefer `envclient run`: it keeps the values out of your disk and your
 scrollback.
 
-## Development
+## Updating
+
+```shell
+envclient update          # show and confirm before installing
+envclient update --check  # only report whether a newer release exists
+envclient update --force  # skip the confirmation (or reinstall the current version)
+```
+
+It downloads the release archive for your OS and architecture, checks it
+against the published `checksums.txt`, and replaces this binary in place —
+the same one you'd get from re-running `install.sh`, without leaving the
+terminal. On a machine with no terminal to confirm at, `--force` is required,
+the same rule `pull` follows.
 
 ```shell
 go test ./...

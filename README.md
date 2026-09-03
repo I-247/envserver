@@ -217,6 +217,7 @@ envclient pull --force                        # apply without asking (deploy)
 envclient check                               # fails with exit 2 if your .env drifts
 envclient run -- php artisan migrate --force  # inject without writing .env
 envclient seal                                # store the release encrypted, locally
+envclient update                              # update envclient itself to the latest release
 ```
 
 `envclient seal` writes the release to disk as `.env.envclient`, encrypted

@@ -58,6 +58,7 @@ func rootCommand() *cobra.Command {
 		runCommand(),
 		sealCommand(),
 		unsealCommand(),
+		updateCommand(),
 	)
 
 	return cmd
