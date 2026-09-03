@@ -4,11 +4,26 @@ Syncs environment variables between an Envserver server and a working directory.
 
 ## Install
 
+On a server, download the latest binary straight from the [releases
+page](https://github.com/I-247/envserver/releases/latest):
+
+```shell
+curl -fsSL https://raw.githubusercontent.com/I-247/envserver/main/cli/scripts/install.sh | sh
+```
+
+It detects the OS and architecture, installs to `/usr/local/bin` (`sudo` if
+needed), and can be redirected elsewhere with `INSTALL_DIR`:
+
+```shell
+curl -fsSL https://raw.githubusercontent.com/I-247/envserver/main/cli/scripts/install.sh \
+    | INSTALL_DIR=$HOME/.local/bin sh
+```
+
+Or build it yourself:
+
 ```shell
 go install github.com/I-247/envserver/cli/cmd/envclient@latest
 ```
-
-Or grab a binary from the releases page.
 
 ## Link a project
 
