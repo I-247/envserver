@@ -134,9 +134,11 @@ func ClientCredentials(ctx context.Context, server, clientID, clientSecret strin
 	}
 
 	var payload struct {
-		Error       string `json:"error"`
-		AccessToken string `json:"access_token"`
-		ExpiresIn   int    `json:"expires_in"`
+		Error            string `json:"error"`
+		ErrorDescription string `json:"error_description"`
+		Message          string `json:"message"` // Laravel's shape for a rejection that never reached the OAuth server, e.g. a rate limit
+		AccessToken      string `json:"access_token"`
+		ExpiresIn        int    `json:"expires_in"`
 	}
 
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -144,13 +146,40 @@ func ClientCredentials(ctx context.Context, server, clientID, clientSecret strin
 	}
 
 	if payload.AccessToken == "" {
-		return config.Credentials{}, fmt.Errorf("could not authenticate with ENVCLIENT_CLIENT_ID/ENVCLIENT_CLIENT_SECRET: %s", payload.Error)
+		reason := firstNonEmpty(payload.ErrorDescription, payload.Error, payload.Message, strings.TrimSpace(string(body)))
+
+		return config.Credentials{}, fmt.Errorf(
+			"could not authenticate with ENVCLIENT_CLIENT_ID/ENVCLIENT_CLIENT_SECRET: %s", reason)
 	}
 
 	return config.Credentials{
 		AccessToken: payload.AccessToken,
 		ExpiresAt:   time.Now().Add(time.Duration(payload.ExpiresIn) * time.Second),
 	}, nil
+}
+
+// firstNonEmpty picks the first non-blank candidate, in order of how
+// specific it is: error_description and error come from a proper OAuth
+// rejection, message from a Laravel response that never reached Passport
+// (a rate limit, an abort), and the raw body is the last resort — silently
+// printing nothing after the colon is worse than a blunt dump of whatever
+// the server actually said.
+func firstNonEmpty(candidates ...string) string {
+	const bodyLimit = 200
+
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+
+		if len(candidate) > bodyLimit {
+			candidate = candidate[:bodyLimit] + "…"
+		}
+
+		return candidate
+	}
+
+	return "the server gave no reason"
 }
 
 func post(ctx context.Context, endpoint string, form url.Values) ([]byte, error) {
