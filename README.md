@@ -1,8 +1,29 @@
-# Envserver
+<p align="center">
+  <img src="resources/images/readme-banner.svg" alt="Envserver" width="820">
+</p>
 
-Central management of environment and security variables, with version
-history, variables you share across multiple projects, and a CLI that hands
-your servers a fresh `.env` during a deploy.
+<p align="center">
+  <img src="https://img.shields.io/badge/PHP-8.3+-171512?style=flat-square&labelColor=171512&color=e6b84c" alt="PHP 8.3+">
+  <img src="https://img.shields.io/badge/Laravel-13-171512?style=flat-square&labelColor=171512&color=e6b84c" alt="Laravel 13">
+  <img src="https://img.shields.io/badge/React-19-171512?style=flat-square&labelColor=171512&color=e6b84c" alt="React 19">
+  <img src="https://img.shields.io/badge/Pest-5-171512?style=flat-square&labelColor=171512&color=e6b84c" alt="Pest 5">
+  <img src="https://img.shields.io/badge/license-MIT-171512?style=flat-square&labelColor=171512&color=e6b84c" alt="MIT license">
+</p>
+
+<p align="center">
+  Central management of environment and security variables, with version
+  history, variables you share across multiple projects, and a CLI that
+  hands your servers a fresh <code>.env</code> during a deploy.
+</p>
+
+<p align="center">
+  <a href="#how-it-fits-together">How it fits together</a> ·
+  <a href="#encryption">Encryption</a> ·
+  <a href="#access">Access</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#the-cli">The CLI</a> ·
+  <a href="#tests">Tests</a>
+</p>
 
 ## How it fits together
 
