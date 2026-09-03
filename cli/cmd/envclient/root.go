@@ -112,12 +112,20 @@ func openSession(ctx context.Context) (*session, error) {
 // by an interactive login.
 func accessToken(ctx context.Context, server string) (string, error) {
 	if deployTokenSet() {
+		// Requesting a scope here only says "this access token may claim to
+		// have it"; ResolveDeployToken still checks it against the deploy
+		// token's own scopes column before anything is actually allowed
+		// (Passport itself will hand out any scope it knows to any client,
+		// per DeployToken's doc comment). So it's safe, and necessary, to
+		// always ask for everything a deploy token could plausibly do —
+		// under-asking here is what previously turned a token that really
+		// was allowed to push into a confusing "Invalid scope(s) provided."
 		credentials, err := auth.ClientCredentials(
 			ctx,
 			server,
 			os.Getenv("ENVCLIENT_CLIENT_ID"),
 			os.Getenv("ENVCLIENT_CLIENT_SECRET"),
-			strings.Fields(envOr("ENVCLIENT_SCOPES", "env:read")),
+			strings.Fields(envOr("ENVCLIENT_SCOPES", "env:read env:write")),
 		)
 		if err != nil {
 			return "", err
