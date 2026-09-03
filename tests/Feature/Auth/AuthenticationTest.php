@@ -25,6 +25,42 @@ class AuthenticationTest extends TestCase
         $response->assertOk();
     }
 
+    public function test_login_screen_hides_registration_when_it_is_disabled()
+    {
+        config(['envserver.registration_enabled' => false]);
+
+        $response = $this->get(route('login'));
+
+        $response->assertOk();
+        $response->assertInertia(fn (Assert $page) => $page
+            ->component('auth/login')
+            ->where('canRegister', false),
+        );
+    }
+
+    public function test_login_screen_still_allows_registration_for_a_pending_team_invitation()
+    {
+        config(['envserver.registration_enabled' => false]);
+
+        $owner = User::factory()->create();
+        $team = Team::factory()->create(['name' => 'Laravel Team']);
+        $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
+
+        $invitation = TeamInvitation::factory()->create([
+            'team_id' => $team->id,
+            'email' => 'invited@example.com',
+            'invited_by' => $owner->id,
+        ]);
+
+        $response = $this->get(route('login', ['invitation' => $invitation->code]));
+
+        $response->assertOk();
+        $response->assertInertia(fn (Assert $page) => $page
+            ->component('auth/login')
+            ->where('canRegister', true),
+        );
+    }
+
     public function test_login_screen_includes_team_invitation_context()
     {
         $owner = User::factory()->create();

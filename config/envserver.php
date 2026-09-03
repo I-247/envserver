@@ -105,4 +105,18 @@ return [
         explode(',', (string) env('ENVSERVER_TRUSTED_PROXIES', ''))
     ))),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Registration
+    |--------------------------------------------------------------------------
+    |
+    | Whether anyone may create an account from the public registration page.
+    | Turning this off does not lock out invited users: a pending team
+    | invitation always lets its recipient register, since that is the only
+    | way for a brand new person to accept it.
+    |
+    */
+
+    'registration_enabled' => (bool) env('ENVSERVER_REGISTRATION_ENABLED', true),
+
 ];

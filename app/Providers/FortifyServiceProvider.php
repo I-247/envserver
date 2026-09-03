@@ -62,11 +62,16 @@ class FortifyServiceProvider extends ServiceProvider
      */
     private function configureViews(): void
     {
-        Fortify::loginView(fn (Request $request) => Inertia::render('auth/login', [
-            'canResetPassword' => Features::enabled(Features::resetPasswords()),
-            'status' => $request->session()->get('status'),
-            'teamInvitation' => $this->teamInvitation($request),
-        ]));
+        Fortify::loginView(function (Request $request) {
+            $teamInvitation = $this->teamInvitation($request);
+
+            return Inertia::render('auth/login', [
+                'canResetPassword' => Features::enabled(Features::resetPasswords()),
+                'canRegister' => $this->registrationEnabled($teamInvitation),
+                'status' => $request->session()->get('status'),
+                'teamInvitation' => $teamInvitation,
+            ]);
+        });
 
         Fortify::resetPasswordView(fn (Request $request) => Inertia::render('auth/reset-password', [
             'email' => $request->email,
@@ -81,9 +86,19 @@ class FortifyServiceProvider extends ServiceProvider
             'status' => $request->session()->get('status'),
         ]));
 
-        Fortify::registerView(fn (Request $request) => Inertia::render('auth/register', [
-            'teamInvitation' => $this->teamInvitation($request),
-        ]));
+        Fortify::registerView(function (Request $request) {
+            $teamInvitation = $this->teamInvitation($request);
+
+            if (! $this->registrationEnabled($teamInvitation)) {
+                return redirect()->route('login')->with(
+                    'status', __('Registration is currently disabled.'),
+                );
+            }
+
+            return Inertia::render('auth/register', [
+                'teamInvitation' => $teamInvitation,
+            ]);
+        });
 
         Fortify::twoFactorChallengeView(fn () => Inertia::render('auth/two-factor-challenge'));
 
@@ -112,6 +127,17 @@ class FortifyServiceProvider extends ServiceProvider
                 ($credentialId ?: $request->session()->getId()).'|'.$request->ip(),
             );
         });
+    }
+
+    /**
+     * Determine if registration is open, either because it's on globally
+     * or because this visitor is holding a valid team invitation.
+     *
+     * @param  array{code: string, teamName: string}|null  $teamInvitation
+     */
+    private function registrationEnabled(?array $teamInvitation): bool
+    {
+        return config('envserver.registration_enabled') || $teamInvitation !== null;
     }
 
     /**
