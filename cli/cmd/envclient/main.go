@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 
+	"github.com/I-247/envserver/cli/internal/config"
 	"github.com/I-247/envserver/cli/internal/ui"
 )
 
@@ -13,6 +14,10 @@ import (
 var version = "dev"
 
 func main() {
+	if dir, err := os.Getwd(); err == nil {
+		config.LoadDeployEnv(dir)
+	}
+
 	if err := rootCommand().Execute(); err != nil {
 		// A command that already reported its own outcome carries the exit
 		// code it wants and nothing more to say. "envclient check" is the one

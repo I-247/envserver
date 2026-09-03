@@ -11,11 +11,24 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/I-247/envserver/cli/internal/envfile"
 )
 
 // ProjectFileName is the file committed alongside the code. It names the
 // project, never a secret, so it is safe in version control.
 const ProjectFileName = "envclient.json"
+
+// DeployEnvFileName holds ENVCLIENT_* values for a machine that would
+// otherwise need them exported by hand, such as ENVCLIENT_CLIENT_ID and
+// ENVCLIENT_CLIENT_SECRET for a deploy token.
+//
+// Deliberately not the .env file "pull" manages, and deliberately not named
+// close to vault.FileName (".env.envclient", the sealed vault): a credential
+// kept in the managed .env would be deleted the moment "pull --prune" runs
+// and the release doesn't mention it, which would lock out the very
+// credential that fetched it. Never commit this file.
+const DeployEnvFileName = ".envclientrc"
 
 // Project links a working directory to one environment on one server.
 type Project struct {
@@ -216,4 +229,28 @@ func ForgetCredentials(server string) error {
 
 func normalise(server string) string {
 	return strings.TrimRight(strings.TrimSpace(server), "/")
+}
+
+// LoadDeployEnv reads DeployEnvFileName in dir, if it exists, and sets any
+// ENVCLIENT_* key it defines that is not already in the process environment.
+//
+// A real export always wins over the file, so this only fills in what would
+// otherwise be missing. Errors are swallowed: the file is an optional
+// convenience, and a machine that exported the variables the normal way
+// should never be tripped up by a file it doesn't have.
+func LoadDeployEnv(dir string) {
+	contents, err := os.ReadFile(filepath.Join(dir, DeployEnvFileName))
+	if err != nil {
+		return
+	}
+
+	for key, value := range envfile.Parse(string(contents)).Values() {
+		if !strings.HasPrefix(key, "ENVCLIENT_") {
+			continue
+		}
+
+		if _, set := os.LookupEnv(key); !set {
+			os.Setenv(key, value)
+		}
+	}
 }

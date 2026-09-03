@@ -280,6 +280,19 @@ func pushCommand() *cobra.Command {
 		Short: "Send the values in your .env to the server",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// A deploy token identifies one environment for reading, and
+			// that's all: there is no route for it to write back, by
+			// design, so a deploy server can never leak the ability to
+			// rewrite Envserver even if its token is stolen. Say so
+			// directly instead of letting the request fail with a
+			// generic 401 that reads as "you're not logged in" when
+			// really "you can never be logged in this way".
+			if deployTokenSet() {
+				return fmt.Errorf(
+					"a deploy token can only pull, never push.\n" +
+						"Unset ENVCLIENT_CLIENT_ID and ENVCLIENT_CLIENT_SECRET for this push, and run \"envclient login\" instead")
+			}
+
 			s, err := openSession(cmd.Context())
 			if err != nil {
 				return err

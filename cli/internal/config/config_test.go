@@ -167,6 +167,65 @@ func TestExpiredLeavesAMinuteOfSlack(t *testing.T) {
 	}
 }
 
+func TestLoadDeployEnvFillsInMissingVariables(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, DeployEnvFileName),
+		"ENVCLIENT_CLIENT_ID=abc\nENVCLIENT_CLIENT_SECRET=secret\n")
+
+	for _, key := range []string{"ENVCLIENT_CLIENT_ID", "ENVCLIENT_CLIENT_SECRET"} {
+		original, wasSet := os.LookupEnv(key)
+		os.Unsetenv(key)
+
+		t.Cleanup(func() {
+			if wasSet {
+				os.Setenv(key, original)
+			} else {
+				os.Unsetenv(key)
+			}
+		})
+	}
+
+	LoadDeployEnv(dir)
+
+	if got := os.Getenv("ENVCLIENT_CLIENT_ID"); got != "abc" {
+		t.Fatalf("ENVCLIENT_CLIENT_ID = %q, want abc", got)
+	}
+
+	if got := os.Getenv("ENVCLIENT_CLIENT_SECRET"); got != "secret" {
+		t.Fatalf("ENVCLIENT_CLIENT_SECRET = %q, want secret", got)
+	}
+}
+
+func TestLoadDeployEnvNeverOverridesARealExport(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, DeployEnvFileName), "ENVCLIENT_CLIENT_ID=from-file\n")
+
+	t.Setenv("ENVCLIENT_CLIENT_ID", "from-shell")
+
+	LoadDeployEnv(dir)
+
+	if got := os.Getenv("ENVCLIENT_CLIENT_ID"); got != "from-shell" {
+		t.Fatalf("ENVCLIENT_CLIENT_ID = %q, want from-shell (the file must never win)", got)
+	}
+}
+
+func TestLoadDeployEnvIgnoresKeysOutsideItsNamespace(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, DeployEnvFileName), "APP_KEY=base64:whatever\n")
+
+	LoadDeployEnv(dir)
+
+	if _, set := os.LookupEnv("APP_KEY"); set {
+		os.Unsetenv("APP_KEY")
+		t.Fatal("LoadDeployEnv set a variable outside the ENVCLIENT_ namespace")
+	}
+}
+
+func TestLoadDeployEnvIsANoOpWhenTheFileIsMissing(t *testing.T) {
+	// Must not panic or error: most machines will never have this file.
+	LoadDeployEnv(t.TempDir())
+}
+
 func write(t *testing.T, path, contents string) {
 	t.Helper()
 
