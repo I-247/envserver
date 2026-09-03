@@ -60,6 +60,15 @@ it('shows the environment with its variables, values masked', function () {
     expect($response->getContent())->not->toContain('super-secret-value');
 });
 
+it('shares the server URL so the page can render the envclient setup command', function () {
+    actingAsTeamMember(TeamRole::Member, $this->team);
+
+    $this->get(portalUrl())->assertInertia(fn (Assert $page) => $page
+        ->component('environments/show')
+        ->where('server', config('app.url'))
+    );
+});
+
 it('marks a variable used by more than one environment as shared', function () {
     actingAsTeamMember(TeamRole::Member, $this->team);
 

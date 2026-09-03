@@ -70,6 +70,7 @@ class EnvironmentController extends Controller
 
         return Inertia::render('environments/show', [
             'project' => ['name' => $project->name, 'slug' => $project->slug],
+            'server' => config('app.url'),
             'environment' => [
                 'name' => $environment->name,
                 'slug' => $environment->slug,

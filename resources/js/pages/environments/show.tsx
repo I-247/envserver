@@ -10,11 +10,13 @@ import {
     Plus,
     Search,
     Share2,
+    Terminal,
     Trash2,
     Upload,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import Code from '@/components/code';
+import CopyButton from '@/components/copy-button';
 import DeleteEnvironmentModal from '@/components/delete-environment-modal';
 import DeleteVariableModal from '@/components/delete-variable-modal';
 import DownloadEnvModal from '@/components/download-env-modal';
@@ -57,6 +59,7 @@ import type {
 
 type Props = {
     project: { name: string; slug: string };
+    server: string;
     environment: EnvironmentSummary;
     variables: EnvironmentVariable[];
     pending: PendingChange[];
@@ -65,8 +68,32 @@ type Props = {
     shareable?: ShareableVariable[];
 };
 
+/**
+ * The commands a developer runs once, from their own machine, to link a
+ * repository to this environment and pull it down. Kept separate from the
+ * deploy token flow on the deploy tokens page: this uses a personal login
+ * (device flow), not a token, and only "envclient init" is scoped to a
+ * specific team/project/environment — "login" and "pull" are the same for
+ * any project.
+ */
+function envclientSetupFor(
+    server: string,
+    team: string,
+    project: string,
+    environment: string,
+): string {
+    return [
+        `envclient login --server ${server}`,
+        `envclient init --server ${server} \\`,
+        `    --team ${team} --project ${project} --environment ${environment}`,
+        'envclient pull',
+        '',
+    ].join('\n');
+}
+
 export default function EnvironmentShow({
     project,
+    server,
     environment,
     variables,
     pending,
@@ -84,6 +111,7 @@ export default function EnvironmentShow({
 
     const [adding, setAdding] = useState(false);
     const [importing, setImporting] = useState(false);
+    const [connecting, setConnecting] = useState(false);
     const [search, setSearch] = useState('');
     const [detaching, setDetaching] = useState<EnvironmentVariable | null>(
         null,
@@ -187,6 +215,105 @@ export default function EnvironmentShow({
                                     <History /> History
                                 </Link>
                             </Button>
+
+                            <Dialog
+                                open={connecting}
+                                onOpenChange={setConnecting}
+                            >
+                                <DialogTrigger asChild>
+                                    <Button
+                                        variant="secondary"
+                                        data-test="connect-with-envclient"
+                                    >
+                                        <Terminal /> Connect with envclient
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>
+                                            Connect with envclient
+                                        </DialogTitle>
+                                        <DialogDescription>
+                                            Run this once from the root of your
+                                            project to link it to {project.slug}
+                                            /{environment.slug}.
+                                        </DialogDescription>
+                                    </DialogHeader>
+
+                                    <div className="space-y-2">
+                                        <div className="flex justify-end">
+                                            <CopyButton
+                                                value={envclientSetupFor(
+                                                    server,
+                                                    teamSlug,
+                                                    project.slug,
+                                                    environment.slug,
+                                                )}
+                                                label="Copy"
+                                                variant="ghost"
+                                            />
+                                        </div>
+
+                                        <pre className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs">
+                                            {envclientSetupFor(
+                                                server,
+                                                teamSlug,
+                                                project.slug,
+                                                environment.slug,
+                                            )}
+                                        </pre>
+
+                                        <ul className="space-y-1 text-sm text-muted-foreground">
+                                            <li>
+                                                <Code>login</Code> opens the
+                                                device flow: a code in the
+                                                terminal, approval in your
+                                                browser.
+                                            </li>
+                                            <li>
+                                                <Code>init</Code> writes an{' '}
+                                                <Code>envclient.json</Code>{' '}
+                                                naming this environment. Commit
+                                                it — it holds no secrets.
+                                            </li>
+                                            <li>
+                                                <Code>pull</Code> writes the
+                                                published variables into your{' '}
+                                                <Code>.env</Code>, and asks
+                                                before changing anything.
+                                            </li>
+                                        </ul>
+
+                                        {permissions.canManageDeployToken ? (
+                                            <p className="text-sm text-muted-foreground">
+                                                Deploying to a server instead of
+                                                a developer's machine? Use a{' '}
+                                                <Link
+                                                    href={environments.deployTokens.index(
+                                                        args,
+                                                    )}
+                                                    className="underline underline-offset-2 hover:text-foreground"
+                                                    onClick={() =>
+                                                        setConnecting(false)
+                                                    }
+                                                >
+                                                    deploy token
+                                                </Link>{' '}
+                                                instead — it needs no personal
+                                                login.
+                                            </p>
+                                        ) : null}
+                                    </div>
+
+                                    <DialogFooter>
+                                        <DialogClose asChild>
+                                            <Button variant="secondary">
+                                                Close
+                                            </Button>
+                                        </DialogClose>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
 
                             {permissions.canManageDeployToken ? (
                                 <Button variant="secondary" asChild>
