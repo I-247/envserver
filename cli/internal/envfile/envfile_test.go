@@ -288,6 +288,25 @@ func TestPruneRemovesLocalOnlyKeys(t *testing.T) {
 	}
 }
 
+// A deploy token's credentials can live in the same .env pull manages (see
+// config.LoadDeployEnv). Pruning them because the release never mentions
+// them would lock out the very credential that fetched the release.
+func TestPruneNeverRemovesEnvclientsOwnCredentials(t *testing.T) {
+	file := Parse("APP_ENV=local\nENVCLIENT_CLIENT_ID=abc\nENVCLIENT_CLIENT_SECRET=def\n")
+
+	result := file.Merge(map[string]string{"APP_ENV": "production"}, MergeOptions{Prune: true})
+
+	if result.Removed != 0 {
+		t.Fatalf("removed %d keys, expected the ENVCLIENT_* keys to survive", result.Removed)
+	}
+
+	got := file.String()
+
+	if !strings.Contains(got, "ENVCLIENT_CLIENT_ID") || !strings.Contains(got, "ENVCLIENT_CLIENT_SECRET") {
+		t.Errorf("a prune deleted envclient's own credentials:\n%s", got)
+	}
+}
+
 func TestPruneIsOffByDefault(t *testing.T) {
 	file := Parse("LOCAL_ONLY=mine\n")
 

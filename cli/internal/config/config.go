@@ -231,26 +231,37 @@ func normalise(server string) string {
 	return strings.TrimRight(strings.TrimSpace(server), "/")
 }
 
-// LoadDeployEnv reads DeployEnvFileName in dir, if it exists, and sets any
-// ENVCLIENT_* key it defines that is not already in the process environment.
-//
-// A real export always wins over the file, so this only fills in what would
-// otherwise be missing. Errors are swallowed: the file is an optional
-// convenience, and a machine that exported the variables the normal way
-// should never be tripped up by a file it doesn't have.
-func LoadDeployEnv(dir string) {
-	contents, err := os.ReadFile(filepath.Join(dir, DeployEnvFileName))
-	if err != nil {
-		return
-	}
+// deployEnvFiles are checked in order for ENVCLIENT_* values. .env is
+// listed for people who keep a deploy token's credentials right alongside
+// the values it fetches rather than in a dedicated file — envfile's
+// mergeKeys knows to never prune an ENVCLIENT_* key for exactly that reason,
+// so a "pull --prune" there can't delete the credential that ran it.
+var deployEnvFiles = []string{DeployEnvFileName, ".env"}
 
-	for key, value := range envfile.Parse(string(contents)).Values() {
-		if !strings.HasPrefix(key, "ENVCLIENT_") {
+// LoadDeployEnv reads each of deployEnvFiles in dir that exists, and sets
+// any ENVCLIENT_* key it defines that is not already in the process
+// environment.
+//
+// A real export always wins over either file, and the first file in the
+// list wins over the second for the same key. Errors are swallowed: both
+// files are an optional convenience, and a machine that exported the
+// variables the normal way should never be tripped up by a file it doesn't
+// have.
+func LoadDeployEnv(dir string) {
+	for _, name := range deployEnvFiles {
+		contents, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
 			continue
 		}
 
-		if _, set := os.LookupEnv(key); !set {
-			os.Setenv(key, value)
+		for key, value := range envfile.Parse(string(contents)).Values() {
+			if !strings.HasPrefix(key, "ENVCLIENT_") {
+				continue
+			}
+
+			if _, set := os.LookupEnv(key); !set {
+				os.Setenv(key, value)
+			}
 		}
 	}
 }

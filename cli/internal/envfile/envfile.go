@@ -265,9 +265,18 @@ func mergeKeys(f *File, values map[string]string, prune bool) []string {
 	}
 
 	for _, key := range f.Keys() {
-		if _, onServer := values[key]; !onServer {
-			keys = append(keys, key)
+		if _, onServer := values[key]; onServer {
+			continue
 		}
+
+		// envclient's own credentials can live in this same file (see
+		// config.LoadDeployEnv). A release never mentions them, so without
+		// this a prune would delete the very credential that fetched it.
+		if strings.HasPrefix(key, "ENVCLIENT_") {
+			continue
+		}
+
+		keys = append(keys, key)
 	}
 
 	sort.Strings(keys)

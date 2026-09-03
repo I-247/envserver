@@ -127,10 +127,13 @@ can only be read from, never used to overwrite what's stored in Envserver.
 Nothing to export on a server you don't script, like one you SSH into by
 hand: drop the same three lines into a `.envclientrc` file next to
 `envclient.json` instead, and every command picks them up automatically. A
-real export always wins over the file. Never commit it — it's a credential,
-unlike `envclient.json`. It's also deliberately not the `.env` file `pull`
-writes: a credential kept there would be the first thing `pull --prune`
-deletes, since the release doesn't know about it.
+real export always wins; `.envclientrc` wins over `.env` for the same key.
+Never commit either file with these values in it.
+
+They can also live directly in the `.env` file `pull` writes, for the same
+effect with one file fewer — `pull --prune` is aware of them and never
+deletes an `ENVCLIENT_*` key even though the release doesn't mention it, so
+that can't lock out the very credential that fetched it.
 
 A deploy server has no terminal to answer the confirmation at, so `pull` there
 needs `--force`. Without it the pull stops with an error rather than guessing.

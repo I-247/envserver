@@ -196,6 +196,49 @@ func TestLoadDeployEnvFillsInMissingVariables(t *testing.T) {
 	}
 }
 
+func TestLoadDeployEnvFallsBackToDotEnv(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, ".env"), "APP_NAME=Shop\nENVCLIENT_CLIENT_ID=from-dotenv\n")
+
+	original, wasSet := os.LookupEnv("ENVCLIENT_CLIENT_ID")
+	os.Unsetenv("ENVCLIENT_CLIENT_ID")
+	t.Cleanup(func() {
+		if wasSet {
+			os.Setenv("ENVCLIENT_CLIENT_ID", original)
+		} else {
+			os.Unsetenv("ENVCLIENT_CLIENT_ID")
+		}
+	})
+
+	LoadDeployEnv(dir)
+
+	if got := os.Getenv("ENVCLIENT_CLIENT_ID"); got != "from-dotenv" {
+		t.Fatalf("ENVCLIENT_CLIENT_ID = %q, want from-dotenv", got)
+	}
+}
+
+func TestLoadDeployEnvPrefersDeployEnvFileNameOverDotEnv(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, DeployEnvFileName), "ENVCLIENT_CLIENT_ID=from-rc\n")
+	write(t, filepath.Join(dir, ".env"), "ENVCLIENT_CLIENT_ID=from-dotenv\n")
+
+	original, wasSet := os.LookupEnv("ENVCLIENT_CLIENT_ID")
+	os.Unsetenv("ENVCLIENT_CLIENT_ID")
+	t.Cleanup(func() {
+		if wasSet {
+			os.Setenv("ENVCLIENT_CLIENT_ID", original)
+		} else {
+			os.Unsetenv("ENVCLIENT_CLIENT_ID")
+		}
+	})
+
+	LoadDeployEnv(dir)
+
+	if got := os.Getenv("ENVCLIENT_CLIENT_ID"); got != "from-rc" {
+		t.Fatalf("ENVCLIENT_CLIENT_ID = %q, want from-rc (DeployEnvFileName must win)", got)
+	}
+}
+
 func TestLoadDeployEnvNeverOverridesARealExport(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, DeployEnvFileName), "ENVCLIENT_CLIENT_ID=from-file\n")
