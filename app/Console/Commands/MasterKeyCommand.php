@@ -66,7 +66,25 @@ class MasterKeyCommand extends Command
             $contents = $this->retire($contents, $current);
         }
 
-        File::put($path, $this->replace($contents, 'ENVSERVER_MASTER_KEY', $key));
+        // File::put() is a thin wrapper around file_put_contents(). On a
+        // write failure (permission denied, disk full, a read only mount)
+        // that returns false rather than throwing — unless the framework's
+        // error handler is configured to turn the underlying PHP warning
+        // into an ErrorException first, which this application's does.
+        // Catch both shapes rather than trusting either one: silently
+        // moving on when nothing was written is how this command can print
+        // success while the env file stays exactly as it was.
+        try {
+            $written = File::put($path, $this->replace($contents, 'ENVSERVER_MASTER_KEY', $key));
+        } catch (\ErrorException) {
+            $written = false;
+        }
+
+        if ($written === false) {
+            $this->error("Could not write to [{$path}]. Check that it is writable by the user running this command.");
+
+            return self::FAILURE;
+        }
 
         $this->info($current === null ? 'Master key generated.' : 'Master key rotated.');
 
