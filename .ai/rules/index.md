@@ -10,6 +10,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Data/SecretAge.php | .ai/rules/data.md |
 | cli/cmd/envclient/**, cli/cmd/envclient/sync_commands.go, cli/cmd/envclient/check_commands.go | .ai/rules/envclient.md |
 | app/Actions/Environments/**, app/Actions/Environments/CompareEnvironments.php | .ai/rules/environments.md |
+| app/Providers/FortifyServiceProvider.php, app/Actions/Fortify/** | .ai/rules/fortify.md |
 | app/Http/Middleware/ResolveDeployToken.php, app/Http/Middleware/{EnsureIpIsAllowed,EnsureTeamIpIsAllowed,TrustProxies}.php | .ai/rules/middleware.md |
 | app/Models/{Variable,VariableVersion,Release,ReleaseItem,VariableAssignment}.php, app/Models/Variable.php | .ai/rules/models.md |
 | app/Actions/Projects/** | .ai/rules/projects.md |
