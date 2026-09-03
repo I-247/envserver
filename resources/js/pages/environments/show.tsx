@@ -240,7 +240,7 @@ export default function EnvironmentShow({
                                         </DialogDescription>
                                     </DialogHeader>
 
-                                    <div className="space-y-2">
+                                    <div className="min-w-0 space-y-2">
                                         <div className="flex justify-end">
                                             <CopyButton
                                                 value={envclientSetupFor(
