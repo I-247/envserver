@@ -228,7 +228,7 @@ export default function EnvironmentShow({
                                         <Terminal /> Connect with envclient
                                     </Button>
                                 </DialogTrigger>
-                                <DialogContent>
+                                <DialogContent className="sm:max-w-2xl">
                                     <DialogHeader>
                                         <DialogTitle>
                                             Connect with envclient
