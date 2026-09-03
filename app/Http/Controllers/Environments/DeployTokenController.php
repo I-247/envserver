@@ -63,15 +63,20 @@ class DeployTokenController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'can_push' => ['sometimes', 'boolean'],
         ]);
 
+        // Read via $request->boolean(), not the "boolean" validation rule: a
+        // native checked checkbox submits "on", which FILTER_VALIDATE_BOOLEAN
+        // (what boolean() uses) accepts and the strict validation rule does
+        // not — that mismatch silently failed validation and 302'd back with
+        // an error nothing on this form displays.
+        //
         // Read is unconditional; push is opt-in per token, because a deploy
         // server that can also rewrite Envserver is a materially bigger
         // thing to have leak than one that can only read.
         $scopes = [ApiScope::EnvironmentRead->value];
 
-        if ($validated['can_push'] ?? false) {
+        if ($request->boolean('can_push')) {
             $scopes[] = ApiScope::EnvironmentWrite->value;
         }
 

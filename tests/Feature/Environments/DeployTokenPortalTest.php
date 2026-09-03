@@ -120,6 +120,27 @@ it('grants push access when can_push is checked', function () {
     expect(DeployToken::sole()->scopes)->toBe(['env:read', 'env:write']);
 });
 
+// A native checked checkbox submits "on", not true/"1" — the actual value a
+// browser sends, and the exact value that silently failed a strict "boolean"
+// validation rule before.
+it('grants push access from a real browser checkbox value', function () {
+    actingAsTeamMember(TeamRole::Admin, $this->team);
+
+    $this->post(tokensUrl(), ['name' => 'CI', 'can_push' => 'on'])
+        ->assertRedirect(tokensUrl());
+
+    expect(DeployToken::sole()->scopes)->toBe(['env:read', 'env:write']);
+});
+
+it('leaves push access off when can_push is not sent at all', function () {
+    actingAsTeamMember(TeamRole::Admin, $this->team);
+
+    $this->post(tokensUrl(), ['name' => 'Ploi'])
+        ->assertRedirect(tokensUrl());
+
+    expect(DeployToken::sole()->scopes)->toBe(['env:read']);
+});
+
 it('revokes a token', function () {
     actingAsTeamMember(TeamRole::Admin, $this->team);
     $token = app(CreateDeployToken::class)->handle($this->environment, 'Ploi')->model;
