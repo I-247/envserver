@@ -2,11 +2,16 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\Variables\PushVariables;
+use App\Enums\AuditAction;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\PushVariablesRequest;
 use App\Http\Resources\ReleaseResource;
 use App\Http\Resources\ReleaseSummaryResource;
 use App\Models\DeployToken;
 use App\Models\Release;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
@@ -20,6 +25,8 @@ use Illuminate\Http\Response;
  */
 class DeployController extends Controller
 {
+    public function __construct(private readonly RecordAuditEvent $audit) {}
+
     /**
      * Get a release, defaulting to the latest one.
      */
@@ -48,6 +55,40 @@ class DeployController extends Controller
             'Content-Type' => 'text/plain; charset=utf-8',
             'Cache-Control' => 'no-store',
         ]);
+    }
+
+    /**
+     * Push a set of variables into the environment.
+     *
+     * Requires the env:write scope, which is opt-in per token — unlike the
+     * read endpoints above, granted to every deploy token. There is no
+     * personal author to record here, so the underlying variable.created and
+     * variable.updated audit entries are actor-less; this event is what
+     * names the token, so the trail still says who.
+     */
+    public function push(PushVariablesRequest $request, PushVariables $push): JsonResponse
+    {
+        $deployToken = $this->token($request);
+        $environment = $deployToken->environment;
+
+        $result = $push->handle($environment, $request->validated('variables'));
+
+        $this->audit->handle(
+            team: $environment->project->team,
+            action: AuditAction::DeployTokenPushed,
+            subject: $deployToken,
+            metadata: [
+                'name' => $deployToken->name,
+                'project' => $environment->project->slug,
+                'environment' => $environment->slug,
+                'created' => $result['created'],
+                'updated' => $result['updated'],
+                'unchanged' => $result['unchanged'],
+                'skipped' => $result['skipped'],
+            ],
+        );
+
+        return response()->json(['data' => $result]);
     }
 
     /**

@@ -200,6 +200,23 @@ func (c *Client) Publish(ctx context.Context, target Target, message string) (*R
 	return &wrapper.Data, nil
 }
 
+// DeployPush sends local values back for the environment a deploy token
+// stands for. Only works when the token was granted env:write, which is
+// opt-in per token — most are read only, and get a 403 here.
+func (c *Client) DeployPush(ctx context.Context, variables map[string]string) (*PushResult, error) {
+	var wrapper struct {
+		Data PushResult `json:"data"`
+	}
+
+	body := map[string]any{"variables": variables}
+
+	if err := c.post(ctx, "/api/v1/deploy/variables", body, &wrapper); err != nil {
+		return nil, err
+	}
+
+	return &wrapper.Data, nil
+}
+
 // DeployRelease fetches the release a deploy token stands for.
 func (c *Client) DeployRelease(ctx context.Context, version int) (*Release, error) {
 	path := "/api/v1/deploy/release"

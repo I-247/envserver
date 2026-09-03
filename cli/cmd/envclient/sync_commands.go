@@ -280,17 +280,15 @@ func pushCommand() *cobra.Command {
 		Short: "Send the values in your .env to the server",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			// A deploy token identifies one environment for reading, and
-			// that's all: there is no route for it to write back, by
-			// design, so a deploy server can never leak the ability to
-			// rewrite Envserver even if its token is stolen. Say so
-			// directly instead of letting the request fail with a
-			// generic 401 that reads as "you're not logged in" when
-			// really "you can never be logged in this way".
-			if deployTokenSet() {
+			// Most deploy tokens are read only by design, and the server
+			// enforces that on its own — a token without env:write gets a
+			// 403 the moment fetchPush below reaches it. --publish stays
+			// developer-only regardless: there is no deploy-scoped route
+			// for it, so a clear local error beats a confusing remote one.
+			if deployTokenSet() && publish {
 				return fmt.Errorf(
-					"a deploy token can only pull, never push.\n" +
-						"Unset ENVCLIENT_CLIENT_ID and ENVCLIENT_CLIENT_SECRET for this push, and run \"envclient login\" instead")
+					"--publish needs a personal login, even with a deploy token that can push.\n" +
+						"Push without --publish, then publish from the portal, or run \"envclient login\" to do both from here")
 			}
 
 			s, err := openSession(cmd.Context())
@@ -313,7 +311,7 @@ func pushCommand() *cobra.Command {
 				return fmt.Errorf("%s holds no variables", path)
 			}
 
-			result, err := s.client.Push(cmd.Context(), s.target, values)
+			result, err := pushVariables(cmd, s, values)
 			if err != nil {
 				return err
 			}
@@ -650,4 +648,17 @@ func fetchRelease(cmd *cobra.Command, s *session, version int) (*api.Release, er
 	}
 
 	return s.client.Release(cmd.Context(), s.target, version)
+}
+
+// pushVariables sends values through whichever credential is in play. A
+// deploy token's session carries no team/project/environment (it never had
+// one to resolve), so it must go through the deploy-scoped endpoint that
+// identifies the environment from the token itself; the server rejects it
+// with a 403 unless that token was granted env:write.
+func pushVariables(cmd *cobra.Command, s *session, variables map[string]string) (*api.PushResult, error) {
+	if deployTokenSet() {
+		return s.client.DeployPush(cmd.Context(), variables)
+	}
+
+	return s.client.Push(cmd.Context(), s.target, variables)
 }

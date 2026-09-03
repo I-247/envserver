@@ -38,6 +38,7 @@ class DeployTokenController extends Controller
                     'name' => $token->name,
                     'clientId' => $token->oauth_client_id,
                     'scopes' => $token->scopes,
+                    'canPush' => in_array(ApiScope::EnvironmentWrite->value, $token->scopes, true),
                     'useCount' => $token->use_count,
                     'lastUsedAt' => $token->last_used_at?->toISOString(),
                     'revokedAt' => $token->revoked_at?->toISOString(),
@@ -62,16 +63,23 @@ class DeployTokenController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'can_push' => ['sometimes', 'boolean'],
         ]);
 
-        // Read only, deliberately not configurable from this screen. A deploy
-        // server needs to fetch a release and nothing else; write access
-        // belongs to a person or to CI.
+        // Read is unconditional; push is opt-in per token, because a deploy
+        // server that can also rewrite Envserver is a materially bigger
+        // thing to have leak than one that can only read.
+        $scopes = [ApiScope::EnvironmentRead->value];
+
+        if ($validated['can_push'] ?? false) {
+            $scopes[] = ApiScope::EnvironmentWrite->value;
+        }
+
         $token = $create->handle(
             $environment,
             $validated['name'],
             $request->user(),
-            [ApiScope::EnvironmentRead->value],
+            $scopes,
         );
 
         // Explicit destination rather than back(): this redirect is the one
@@ -85,6 +93,7 @@ class DeployTokenController extends Controller
             'name' => $token->model->name,
             'clientId' => $token->clientId,
             'clientSecret' => $token->clientSecret,
+            'canPush' => in_array(ApiScope::EnvironmentWrite->value, $scopes, true),
         ]);
     }
 

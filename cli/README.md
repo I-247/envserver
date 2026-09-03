@@ -58,9 +58,10 @@ file. It never removes a key that exists only in your file, and by default
 never adds one you did not ask for: your machine specific entries stay yours,
 unless you ask for `--prune`.
 
-`push` needs a personal login (`envclient login`), never a deploy token — a
-deploy token can only read, so a server it's on can never write back into
-Envserver even if the token leaks.
+`push` works with a personal login (`envclient login`) or a deploy token that
+was explicitly granted push access when it was created — most are read only,
+and get a 403 for it. `--publish` always needs a personal login, even then:
+there is no deploy-scoped route for publishing a release.
 
 ## Output
 
@@ -119,6 +120,9 @@ export ENVCLIENT_CLIENT_SECRET=...
 
 The token is bound to a single environment server side, so nothing in the
 deploy script has to name one, and nothing in it can point somewhere else.
+It's read only unless the portal's "also allow this token to push variables"
+checkbox was ticked when it was created — off by default, so a leaked token
+can only be read from, never used to overwrite what's stored in Envserver.
 
 Nothing to export on a server you don't script, like one you SSH into by
 hand: drop the same three lines into a `.envclientrc` file next to

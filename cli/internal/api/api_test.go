@@ -138,6 +138,37 @@ func TestPushSendsTheVariablesAsJSON(t *testing.T) {
 	}
 }
 
+func TestDeployPushSendsTheVariablesToTheDeployScopedPath(t *testing.T) {
+	var (
+		path string
+		body map[string]map[string]string
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"updated": 1}})
+	}))
+	defer server.Close()
+
+	result, err := New(server.URL, "t").DeployPush(context.Background(), map[string]string{"A": "1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if path != "/api/v1/deploy/variables" {
+		t.Fatalf("path = %q", path)
+	}
+
+	if body["variables"]["A"] != "1" {
+		t.Fatalf("body = %#v", body)
+	}
+
+	if result.Updated != 1 {
+		t.Fatalf("Updated = %d", result.Updated)
+	}
+}
+
 func TestDiscoverNeedsNoToken(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "" {

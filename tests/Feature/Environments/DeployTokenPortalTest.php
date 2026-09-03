@@ -100,14 +100,24 @@ it('stores the client secret hashed, so it can never be served again', function 
         ->and($stored)->toStartWith('$2y$');
 });
 
-it('gives a deploy token read access only', function () {
+it('gives a deploy token read access only by default', function () {
     actingAsTeamMember(TeamRole::Admin, $this->team);
 
+    // A client-supplied scopes array is never trusted directly — only the
+    // can_push checkbox below may add env:write.
     $this->post(tokensUrl(), ['name' => 'Ploi', 'scopes' => ['env:read', 'env:write']])
         ->assertRedirect();
 
-    // A production server has no business writing back.
     expect(DeployToken::sole()->scopes)->toBe(['env:read']);
+});
+
+it('grants push access when can_push is checked', function () {
+    actingAsTeamMember(TeamRole::Admin, $this->team);
+
+    $this->post(tokensUrl(), ['name' => 'CI', 'can_push' => true])
+        ->assertRedirect();
+
+    expect(DeployToken::sole()->scopes)->toBe(['env:read', 'env:write']);
 });
 
 it('revokes a token', function () {

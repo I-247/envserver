@@ -6,8 +6,8 @@ paths:
 
 # Variables
 
-## CLI-push en .env-import in het portaal delen één pad
-PushVariables is het enige pad dat een map key/value op een omgeving toepast: zowel `envclient push` als de import-modal in het portaal. ConflictStrategy::Keep laat bestaande sleutels ongemoeid (telt als `skipped`), Overwrite is de default zodat de CLI zich niet anders gedraagt dan voorheen.
+## CLI-push, .env-import in het portaal en een push-capable deploy token delen één pad
+PushVariables is het enige pad dat een map key/value op een omgeving toepast: `envclient push` (persoonlijke login), de import-modal in het portaal, én `DeployController::push` voor een deploy token met de `env:write`-scope (opt-in, de meeste tokens hebben hem niet). Die laatste roept `handle()` aan zonder `$author` — een null-actor is dus een geldige, bewuste staat, niet een bug. ConflictStrategy::Keep laat bestaande sleutels ongemoeid (telt als `skipped`), Overwrite is de default zodat de CLI zich niet anders gedraagt dan voorheen.
 
 Een conflict wordt bepaald op de effectieve sleutel uit ResolveEnvironmentVariables, dus een alias telt mee. Matchen op variable.key zou de verkeerde variabele overschrijven.
 

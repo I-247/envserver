@@ -6,6 +6,8 @@ use App\Actions\Variables\AttachVariableToEnvironment;
 use App\Actions\Variables\CreateVariable;
 use App\Actions\Variables\UpdateVariableValue;
 use App\Data\NewDeployToken;
+use App\Enums\AuditAction;
+use App\Models\AuditEvent;
 use App\Models\Environment;
 use App\Models\Project;
 use App\Models\Team;
@@ -175,6 +177,39 @@ it('records when the token was last used', function () {
     $this->withToken(accessTokenFor($token))->getJson('/api/v1/deploy/release')->assertOk();
 
     expect($token->model->fresh()->last_used_at)->not->toBeNull();
+});
+
+it('pushes variables with a token granted the write scope', function () {
+    $token = issueDeployToken(scopes: ['env:read', 'env:write']);
+
+    $this->withToken(accessTokenFor($token, 'env:write'))
+        ->postJson('/api/v1/deploy/variables', ['variables' => ['APP_ENV' => 'production']])
+        ->assertOk()
+        ->assertJsonPath('data.created', 1);
+
+    expect($this->environment->fresh()->variables()->where('key', 'APP_ENV')->exists())->toBeTrue();
+});
+
+it('refuses a push from a token that was not granted the write scope', function () {
+    $token = issueDeployToken(scopes: ['env:read']);
+
+    $this->withToken(accessTokenFor($token))
+        ->postJson('/api/v1/deploy/variables', ['variables' => ['APP_ENV' => 'production']])
+        ->assertForbidden();
+});
+
+it('records which deploy token pushed', function () {
+    $token = issueDeployToken(scopes: ['env:read', 'env:write']);
+
+    $this->withToken(accessTokenFor($token, 'env:write'))
+        ->postJson('/api/v1/deploy/variables', ['variables' => ['APP_ENV' => 'production']])
+        ->assertOk();
+
+    $event = AuditEvent::where('action', AuditAction::DeployTokenPushed)->sole();
+
+    expect($event->actor_id)->toBeNull()
+        ->and($event->subject_id)->toBe($token->model->id)
+        ->and($event->metadata['created'])->toBe(1);
 });
 
 it('counts every use of the token', function () {

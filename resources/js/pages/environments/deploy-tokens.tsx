@@ -7,6 +7,7 @@ import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogClose,
@@ -27,13 +28,19 @@ type DeployTokenRow = {
     name: string;
     clientId: string;
     scopes: string[];
+    canPush: boolean;
     useCount: number;
     lastUsedAt: string | null;
     revokedAt: string | null;
     createdAt: string | null;
 };
 
-type NewToken = { name: string; clientId: string; clientSecret: string };
+type NewToken = {
+    name: string;
+    clientId: string;
+    clientSecret: string;
+    canPush: boolean;
+};
 
 type Props = {
     project: { name: string; slug: string };
@@ -52,15 +59,20 @@ function envFileFor(
     project: string,
     environment: string,
 ): string {
+    const access = token.canPush
+        ? `Grants read and push access to ${project}/${environment}, and nothing else.`
+        : `Grants read only access to ${project}/${environment}, and nothing else.`;
+
     return [
         `# Envserver deploy token "${token.name}"`,
-        `# Grants read only access to ${project}/${environment}, and nothing else.`,
+        `# ${access}`,
         '# Keep this on the deploy server. Never commit it.',
         '#',
         '# Load it into the environment, then pull:',
         '#',
         '#   set -a; . ./this-file; set +a',
         `#   ${PULL_COMMAND}`,
+        ...(token.canPush ? [`#   ${PUSH_COMMAND}`] : []),
         '',
         `ENVCLIENT_SERVER=${server}`,
         `ENVCLIENT_CLIENT_ID=${token.clientId}`,
@@ -79,21 +91,25 @@ function envFileFor(
 const PULL_COMMAND = 'envclient pull --constructive --force --out .env';
 
 /**
- * The exact commands to run on the deploy server: export the token, then
- * pull. Kept separate from {@link envFileFor} so it can be copied on its
- * own, with no secret sitting in shell history if pasted straight into a
- * terminal instead of a file.
+ * Only meaningful for a token that was granted push access — envclient
+ * refuses this with a read only token before it even reaches the server.
  */
-function deployScriptFor(
-    token: NewToken,
-    server: string,
-): string {
+const PUSH_COMMAND = 'envclient push -m "..."';
+
+/**
+ * The exact commands to run on the deploy server: export the token, then
+ * pull (and push, if the token allows it). Kept separate from
+ * {@link envFileFor} so it can be copied on its own, with no secret sitting
+ * in shell history if pasted straight into a terminal instead of a file.
+ */
+function deployScriptFor(token: NewToken, server: string): string {
     return [
         `export ENVCLIENT_SERVER=${server}`,
         `export ENVCLIENT_CLIENT_ID=${token.clientId}`,
         `export ENVCLIENT_CLIENT_SECRET=${token.clientSecret}`,
         '',
         PULL_COMMAND,
+        ...(token.canPush ? [PUSH_COMMAND] : []),
         '',
     ].join('\n');
 }
@@ -173,7 +189,7 @@ export default function DeployTokens({
                     <Heading
                         variant="small"
                         title="Deploy tokens"
-                        description={`Read only access to ${project.slug}/${environment.slug}, and nothing else.`}
+                        description={`Scoped to ${project.slug}/${environment.slug}, and nothing else. Read only unless push is granted below.`}
                     />
 
                     <Dialog open={creating} onOpenChange={setCreating}>
@@ -211,6 +227,28 @@ export default function DeployTokens({
                                                 autoFocus
                                             />
                                             <InputError message={errors.name} />
+                                        </div>
+
+                                        <div className="flex items-start gap-3">
+                                            <Checkbox
+                                                id="can_push"
+                                                name="can_push"
+                                            />
+                                            <div className="grid gap-1">
+                                                <Label
+                                                    htmlFor="can_push"
+                                                    className="cursor-pointer"
+                                                >
+                                                    Also allow this token to
+                                                    push variables
+                                                </Label>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Off by default: a leaked
+                                                    token can then only be read,
+                                                    never used to overwrite
+                                                    what's stored here.
+                                                </p>
+                                            </div>
                                         </div>
 
                                         <DialogFooter className="gap-2">
@@ -309,16 +347,15 @@ export default function DeployTokens({
                                     deploy can create it from nothing.
                                 </li>
                                 <li>
-                                    <Code>--force</Code> skips the
-                                    confirmation prompt. A deploy server has
-                                    no terminal to answer it, so pull refuses
-                                    to run without this flag.
+                                    <Code>--force</Code> skips the confirmation
+                                    prompt. A deploy server has no terminal to
+                                    answer it, so pull refuses to run without
+                                    this flag.
                                 </li>
                                 <li>
-                                    <Code>--out .env</Code> sets where the
-                                    file is written; drop it to use{' '}
-                                    <Code>.env</Code> next to{' '}
-                                    <Code>envclient.json</Code>.
+                                    <Code>--out .env</Code> sets where the file
+                                    is written; drop it to use <Code>.env</Code>{' '}
+                                    next to <Code>envclient.json</Code>.
                                 </li>
                             </ul>
                         </div>
@@ -347,6 +384,11 @@ export default function DeployTokens({
                                         <span className="font-medium">
                                             {token.name}
                                         </span>
+                                        {token.canPush ? (
+                                            <Badge variant="secondary">
+                                                Can push
+                                            </Badge>
+                                        ) : null}
                                         {token.revokedAt ? (
                                             <Badge variant="outline">
                                                 Revoked

@@ -27,6 +27,7 @@ enum AuditAction: string
     case DeployTokenCreated = 'deploy-token.created';
     case DeployTokenRevoked = 'deploy-token.revoked';
     case DeployTokenBlocked = 'deploy-token.blocked';
+    case DeployTokenPushed = 'deploy-token.pushed';
 
     case TeamIpAllowListUpdated = 'team.ip-allowlist-updated';
     case TeamTwoFactorRequirementUpdated = 'team.two-factor-requirement-updated';
@@ -59,6 +60,7 @@ enum AuditAction: string
             self::DeployTokenCreated => 'Deploy token created',
             self::DeployTokenRevoked => 'Deploy token revoked',
             self::DeployTokenBlocked => 'Deploy token blocked by IP allow list',
+            self::DeployTokenPushed => 'Variables pushed by deploy token',
             self::TeamIpAllowListUpdated => 'Team IP allow list changed',
             self::TeamTwoFactorRequirementUpdated => 'Team two-factor requirement changed',
             self::TeamRotationPolicyUpdated => 'Team rotation policy changed',

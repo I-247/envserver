@@ -27,6 +27,17 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         });
 
     /*
+     * A separate group, not appended to the one above: a token that may only
+     * push should not also be required to hold env:read, and vice versa.
+     * Every deploy token gets env:read; env:write is opt-in per token.
+     */
+    Route::prefix('deploy')->name('deploy.')
+        ->middleware(ResolveDeployToken::using(ApiScope::EnvironmentWrite->value))
+        ->group(function () {
+            Route::post('variables', [DeployController::class, 'push'])->name('variables.push');
+        });
+
+    /*
      * Developer endpoints, reached with a personal token from the device
      * flow. These do name the environment, because a personal token spans
      * every team the developer belongs to.
