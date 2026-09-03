@@ -234,9 +234,9 @@ export default function EnvironmentShow({
                                             Connect with envclient
                                         </DialogTitle>
                                         <DialogDescription>
-                                            Run this once from the root of your
-                                            project to link it to {project.slug}
-                                            /{environment.slug}.
+                                            The personal way to link a project
+                                            to {project.slug}/{environment.slug}
+                                            . Run this once from its root.
                                         </DialogDescription>
                                     </DialogHeader>
 
@@ -286,8 +286,7 @@ export default function EnvironmentShow({
 
                                         {permissions.canManageDeployToken ? (
                                             <p className="text-sm text-muted-foreground">
-                                                Deploying to a server instead of
-                                                a developer's machine? Use a{' '}
+                                                None of the above is required. A{' '}
                                                 <Link
                                                     href={environments.deployTokens.index(
                                                         args,
@@ -299,8 +298,17 @@ export default function EnvironmentShow({
                                                 >
                                                     deploy token
                                                 </Link>{' '}
-                                                instead — it needs no personal
-                                                login.
+                                                dropped into your{' '}
+                                                <Code>.env</Code> works just as
+                                                well, on your own machine or a
+                                                server: <Code>pull</Code> (and{' '}
+                                                <Code>push</Code>, if the token
+                                                allows it) picks it up with no
+                                                login and no{' '}
+                                                <Code>envclient.json</Code>{' '}
+                                                needed. Login and init only buy
+                                                you a personal identity and{' '}
+                                                <Code>--publish</Code>.
                                             </p>
                                         ) : null}
                                     </div>
