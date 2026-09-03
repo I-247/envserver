@@ -11,6 +11,7 @@ on:
     paths:
       - 'cli/**'
       - '.github/workflows/cli.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
