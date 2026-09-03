@@ -3,6 +3,7 @@ paths:
   - 'cli/cmd/envclient/**'
   - cli/cmd/envclient/sync_commands.go
   - cli/cmd/envclient/check_commands.go
+  - 'cli/internal/config/**'
 ---
 
 # Envclient CLI
@@ -26,3 +27,8 @@ Sleutels die alleen lokaal bestaan tellen standaard niet mee, dezelfde belofte d
 
 ## Every command a deploy server can run must resolve credentials through fetchRelease
 A deploy token never has a envclient.json, so `s.target` is empty and the regular `/api/v1/teams/.../release` route 403s for it (that route needs a user-scoped token, not a client-credentials one). `pull` and `run` already route through `fetchRelease(cmd, s, version)`, which calls `s.client.DeployRelease()` when `deployTokenSet()` instead of `s.client.Release(cmd.Context(), s.target, ...)`. Any new command meant to work in CI/on a deploy server (like `check`, which was fixed for this after shipping without it) must do the same — never call `s.client.Release` directly.
+
+## Deploy tokens can only pull; credentials also load from .envclientrc
+`envclient push` refuses upfront (before any request) when `deployTokenSet()` is true — a deploy token has no write route server-side (see routes/api.php's `deploy` group: read-only), and deploy-token env vars always take priority over a stored personal login in `accessToken()`, so "just run envclient login" doesn't fix it unless ENVCLIENT_CLIENT_ID/SECRET are also unset. Keep this guard in any future write command.
+
+`config.LoadDeployEnv` (called once in main.go before Execute) fills in ENVCLIENT_* env vars from `.envclientrc` in the cwd when not already exported. That filename is deliberately distinct from both `envclient.json` (committed, no secrets) and `vault.FileName` = `.env.envclient` (the sealed vault) — and deliberately not the `.env` file `pull` manages, since `pull --prune` would delete a credential kept there.

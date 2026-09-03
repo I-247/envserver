@@ -8,7 +8,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Http/Controllers/Environments/** | .ai/rules/controllers-environments.md |
 | app/Cryptography/** | .ai/rules/cryptography.md |
 | app/Data/SecretAge.php | .ai/rules/data.md |
-| cli/cmd/envclient/**, cli/cmd/envclient/sync_commands.go, cli/cmd/envclient/check_commands.go | .ai/rules/envclient.md |
+| cli/cmd/envclient/**, cli/cmd/envclient/sync_commands.go, cli/cmd/envclient/check_commands.go, cli/internal/config/** | .ai/rules/envclient.md |
 | app/Actions/Environments/**, app/Actions/Environments/CompareEnvironments.php | .ai/rules/environments.md |
 | app/Providers/FortifyServiceProvider.php, app/Actions/Fortify/** | .ai/rules/fortify.md |
 | app/Http/Middleware/ResolveDeployToken.php, app/Http/Middleware/{EnsureIpIsAllowed,EnsureTeamIpIsAllowed,TrustProxies}.php | .ai/rules/middleware.md |
