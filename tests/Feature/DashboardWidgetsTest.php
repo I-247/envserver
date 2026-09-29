@@ -136,7 +136,7 @@ it('explains how the team key protects the stored variables', function () {
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('encryption.cipher', 'AES-256-GCM')
-            ->where('encryption.scheme', 'v1')
+            ->where('encryption.scheme', 'v2')
             ->where('encryption.keyVersion', 1)
             ->whereNot('encryption.keyCreatedAt', null),
         );
@@ -149,7 +149,7 @@ it('reports no key version for a team that stored nothing yet', function () {
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('encryption.keyVersion', null)
-            ->where('encryption.scheme', 'v1'),
+            ->where('encryption.scheme', 'v2'),
         );
 
     expect($this->team->fresh()->currentKey())->toBeNull();

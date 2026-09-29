@@ -62,9 +62,13 @@ class VariableVersion extends Model
      */
     public function reveal(): string
     {
+        $team = $this->variable->team;
+
         return app(TeamKeyManager::class)->decryptFor(
-            $this->variable->team,
+            $team,
             $this->ciphertext,
+            TeamKeyManager::valueContext($team->id, $this->variable_id, $this->version),
+            $this->team_key_version,
         );
     }
 }

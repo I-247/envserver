@@ -29,10 +29,11 @@ class WriteVariableVersion
         ?string $note = null,
     ): VariableVersion {
         $team = $variable->team;
+        $version = (int) $variable->versions()->max('version') + 1;
 
         return $variable->versions()->create([
-            'version' => (int) $variable->versions()->max('version') + 1,
-            'ciphertext' => $this->keys->encryptFor($team, $value),
+            'version' => $version,
+            'ciphertext' => $this->keys->encryptFor($team, $value, TeamKeyManager::valueContext($team->id, $variable->id, $version)),
             'checksum' => $this->checksum($team, $value),
             'team_key_version' => $team->currentKey()->version,
             'author_id' => $author?->id,

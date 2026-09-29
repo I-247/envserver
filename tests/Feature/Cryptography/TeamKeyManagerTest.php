@@ -1,5 +1,7 @@
 <?php
 
+use App\Actions\Variables\CreateVariable;
+use App\Contracts\SecretCipher;
 use App\Cryptography\TeamKeyManager;
 use App\Exceptions\DecryptionFailed;
 use App\Models\Team;
@@ -48,7 +50,7 @@ it('never stores the raw data key', function () {
 
     expect($stored)->not->toContain($key)
         ->and($stored)->not->toContain(base64_encode($key))
-        ->and($stored)->toStartWith('v1.');
+        ->and($stored)->toStartWith('v2.');
 });
 
 it('still unwraps a data key after the master key was rotated', function () {
@@ -93,4 +95,93 @@ it('cannot decrypt a value that belongs to another team', function () {
 
     expect(fn () => $manager->decryptFor(Team::factory()->create(), $payload))
         ->toThrow(DecryptionFailed::class);
+});
+
+it('does not decrypt a value that was copied into another variable', function () {
+    $team = Team::factory()->create();
+
+    $password = app(CreateVariable::class)->handle($team, 'DB_PASSWORD', 'the-real-secret');
+    $harmless = app(CreateVariable::class)->handle($team, 'APP_NAME', 'Shop');
+
+    $harmless->currentVersion()->forceFill(['ciphertext' => $password->currentVersion()->ciphertext])->saveQuietly();
+
+    expect(fn () => $harmless->fresh()->currentVersion()->reveal())->toThrow(DecryptionFailed::class);
+});
+
+it('reads a value with the key version it was written with', function () {
+    $team = Team::factory()->create();
+    $variable = app(CreateVariable::class)->handle($team, 'API_KEY', 'written-under-v1');
+
+    $team->currentKey()->forceFill(['retired_at' => now()])->save();
+    $manager = app(TeamKeyManager::class);
+    $manager->provision($team);
+
+    expect($team->currentKey()->version)->toBe(2)
+        ->and($variable->fresh()->currentVersion()->reveal())->toBe('written-under-v1');
+});
+
+it('provisions a single key when asked twice', function () {
+    $team = Team::factory()->create();
+    $manager = app(TeamKeyManager::class);
+
+    $first = $manager->provision($team);
+    $second = $manager->provision($team);
+
+    expect($second->id)->toBe($first->id)
+        ->and($team->keys()->count())->toBe(1);
+});
+
+it('re-wraps retired keys too, so the old master key can really go', function () {
+    config(['envserver.master_key' => masterKey('old'), 'envserver.previous_master_keys' => []]);
+
+    $team = Team::factory()->create();
+    $variable = app(CreateVariable::class)->handle($team, 'API_KEY', 'kept');
+
+    $team->currentKey()->forceFill(['retired_at' => now()])->save();
+    app(TeamKeyManager::class)->provision($team);
+
+    config(['envserver.master_key' => masterKey('new'), 'envserver.previous_master_keys' => [masterKey('old')]]);
+    app()->forgetInstance(TeamKeyManager::class);
+    app(TeamKeyManager::class)->rewrap($team);
+
+    config(['envserver.previous_master_keys' => []]);
+    app()->forgetInstance(TeamKeyManager::class);
+
+    expect($variable->fresh()->currentVersion()->reveal())->toBe('kept');
+});
+
+it('binds a wrapped data key to its team and version', function () {
+    $a = Team::factory()->create();
+    $b = Team::factory()->create();
+    $manager = app(TeamKeyManager::class);
+    $manager->dataKeyFor($a);
+    $manager->dataKeyFor($b);
+
+    $b->currentKey()->forceFill(['wrapped_key' => $a->currentKey()->wrapped_key])->save();
+    app()->forgetInstance(TeamKeyManager::class);
+
+    expect(fn () => app(TeamKeyManager::class)->dataKeyFor($b->fresh()))->toThrow(DecryptionFailed::class);
+});
+
+it('moves legacy payloads onto the bound scheme without changing a value', function () {
+    $team = Team::factory()->create();
+    $variable = app(CreateVariable::class)->handle($team, 'DB_PASSWORD', 'p$ssw0rd');
+    $version = $variable->currentVersion();
+
+    $dataKey = app(TeamKeyManager::class)->dataKeyFor($team);
+    $nonce = random_bytes(12);
+    $tag = '';
+    $raw = openssl_encrypt('p$ssw0rd', 'aes-256-gcm', $dataKey, OPENSSL_RAW_DATA, $nonce, $tag, '', 16);
+    $legacy = implode('.', ['v1', base64_encode($nonce), base64_encode($tag), base64_encode($raw)]);
+    $version->forceFill(['ciphertext' => $legacy])->saveQuietly();
+
+    $this->artisan('envserver:upgrade-encryption')->assertSuccessful();
+
+    $upgraded = $version->fresh();
+
+    expect(app(SecretCipher::class)->isLegacy($upgraded->ciphertext))->toBeFalse()
+        ->and($upgraded->ciphertext)->toStartWith('v2.')
+        ->and($upgraded->version)->toBe($version->version)
+        ->and($upgraded->reveal())->toBe('p$ssw0rd')
+        ->and($team->currentKey()->algorithm)->toBe('v2');
 });

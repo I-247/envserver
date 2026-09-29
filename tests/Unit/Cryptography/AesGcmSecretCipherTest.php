@@ -35,7 +35,7 @@ it('produces a different payload every time so equal values are not detectable',
 });
 
 it('tags the payload with the scheme version', function () {
-    expect($this->cipher->encrypt('x', $this->key))->toStartWith('v1.');
+    expect($this->cipher->encrypt('x', $this->key))->toStartWith('v2.');
 });
 
 it('refuses a payload that was tampered with', function () {
@@ -79,4 +79,24 @@ it('refuses a malformed payload', function (string $payload) {
 it('rejects a key that is not 256 bits', function () {
     expect(fn () => $this->cipher->encrypt('x', random_bytes(16)))
         ->toThrow(InvalidArgumentException::class);
+});
+
+it('binds a payload to the context it was written for', function () {
+    $payload = $this->cipher->encrypt('hunter2', $this->key, 'team=1:variable=1:version=1');
+
+    expect($this->cipher->decrypt($payload, $this->key, 'team=1:variable=1:version=1'))->toBe('hunter2')
+        ->and(fn () => $this->cipher->decrypt($payload, $this->key, 'team=1:variable=2:version=1'))
+        ->toThrow(DecryptionFailed::class)
+        ->and(fn () => $this->cipher->decrypt($payload, $this->key))
+        ->toThrow(DecryptionFailed::class);
+});
+
+it('still reads a payload written before contexts existed', function () {
+    $nonce = random_bytes(12);
+    $tag = '';
+    $ciphertext = openssl_encrypt('legacy', 'aes-256-gcm', $this->key, OPENSSL_RAW_DATA, $nonce, $tag, '', 16);
+    $legacy = implode('.', ['v1', base64_encode($nonce), base64_encode($tag), base64_encode($ciphertext)]);
+
+    expect($this->cipher->isLegacy($legacy))->toBeTrue()
+        ->and($this->cipher->decrypt($legacy, $this->key, 'any context'))->toBe('legacy');
 });

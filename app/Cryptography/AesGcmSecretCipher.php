@@ -10,14 +10,25 @@ use SensitiveParameter;
 /**
  * AES-256-GCM with a random nonce per encryption.
  *
- * Payloads look like "v1.{nonce}.{tag}.{ciphertext}", each part base64 encoded.
- * The version prefix is what makes the scheme replaceable: a future v2 can be
- * introduced while v1 payloads still decrypt, so a migration never has to be a
- * big-bang re-encryption of the whole database.
+ * Payloads look like "v2.{nonce}.{tag}.{ciphertext}", each part base64 encoded.
+ * The version prefix is what makes the scheme replaceable: a new version can be
+ * introduced while older payloads still decrypt, so a migration never has to
+ * be a big-bang re-encryption of the whole database.
+ *
+ * v2 authenticates a context string as additional data (AAD) next to the
+ * ciphertext. The caller passes where the payload lives, such as "this team,
+ * this variable, this version", so a payload copied into another row fails
+ * authentication instead of decrypting as somebody else's value. v1 had no
+ * context and is still read, but never written.
  */
 class AesGcmSecretCipher implements SecretCipher
 {
-    public const VERSION = 'v1';
+    public const VERSION = 'v2';
+
+    /**
+     * The scheme before payloads were bound to a context.
+     */
+    public const LEGACY_VERSION = 'v1';
 
     private const CIPHER = 'aes-256-gcm';
 
@@ -27,7 +38,7 @@ class AesGcmSecretCipher implements SecretCipher
 
     private const TAG_BYTES = 16;
 
-    public function encrypt(#[SensitiveParameter] string $plaintext, #[SensitiveParameter] string $key): string
+    public function encrypt(#[SensitiveParameter] string $plaintext, #[SensitiveParameter] string $key, string $context = ''): string
     {
         $this->assertUsableKey($key);
 
@@ -41,7 +52,7 @@ class AesGcmSecretCipher implements SecretCipher
             OPENSSL_RAW_DATA,
             $nonce,
             $tag,
-            '',
+            $context,
             self::TAG_BYTES,
         );
 
@@ -57,7 +68,7 @@ class AesGcmSecretCipher implements SecretCipher
         ]);
     }
 
-    public function decrypt(string $payload, #[SensitiveParameter] string $key): string
+    public function decrypt(string $payload, #[SensitiveParameter] string $key, string $context = ''): string
     {
         $this->assertUsableKey($key);
 
@@ -69,7 +80,7 @@ class AesGcmSecretCipher implements SecretCipher
 
         [$version, $nonce, $tag, $ciphertext] = $parts;
 
-        if ($version !== self::VERSION) {
+        if (! in_array($version, [self::VERSION, self::LEGACY_VERSION], true)) {
             throw DecryptionFailed::unsupportedScheme($version);
         }
 
@@ -88,6 +99,9 @@ class AesGcmSecretCipher implements SecretCipher
             OPENSSL_RAW_DATA,
             $nonce,
             $tag,
+            // A v1 payload was written without a context, so it only
+            // authenticates without one.
+            $version === self::LEGACY_VERSION ? '' : $context,
         );
 
         if ($plaintext === false) {
@@ -95,6 +109,14 @@ class AesGcmSecretCipher implements SecretCipher
         }
 
         return $plaintext;
+    }
+
+    /**
+     * Determine whether a payload was written before contexts existed.
+     */
+    public function isLegacy(string $payload): bool
+    {
+        return str_starts_with($payload, self::LEGACY_VERSION.'.');
     }
 
     /**
