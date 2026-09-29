@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AddSecurityHeaders;
 use App\Http\Middleware\EnsureIpIsAllowed;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -34,6 +35,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // than the client. It stays opt in: trusting a proxy means trusting
         // whatever it puts in X-Forwarded-For.
         $middleware->replace(BaseTrustProxies::class, TrustProxies::class);
+
+        // Global rather than per group: an error page or a JSON response can
+        // be framed or sniffed just as well as an Inertia page.
+        $middleware->append(AddSecurityHeaders::class);
 
         // Ahead of the session on purpose: a request from an address that is
         // not on the operator's allow list should never start a session.

@@ -12,6 +12,7 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -96,6 +97,14 @@ class AppServiceProvider extends ServiceProvider
     protected function configureDefaults(): void
     {
         Date::use(CarbonImmutable::class);
+
+        // A debug error page prints the environment, master key included. A
+        // production .env copied from .env.example must not be able to do that.
+        if (app()->isProduction() && config('app.debug')) {
+            config(['app.debug' => false]);
+
+            Log::warning('APP_DEBUG is on in production; it has been switched off. Set APP_DEBUG=false.');
+        }
 
         DB::prohibitDestructiveCommands(
             app()->isProduction(),
