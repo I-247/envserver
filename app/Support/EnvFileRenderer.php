@@ -47,7 +47,10 @@ class EnvFileRenderer
         $lines = [];
 
         if ($header !== null) {
-            foreach (explode("\n", $header) as $line) {
+            // Every kind of line break, not just \n: phpdotenv also ends a
+            // line at a bare \r, so a project named "x\rEVIL=1" would
+            // otherwise put a live EVIL=1 below the comment.
+            foreach (preg_split('/\R/u', $header) ?: [] as $line) {
                 $lines[] = rtrim('# '.$line);
             }
 
