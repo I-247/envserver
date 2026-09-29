@@ -36,6 +36,10 @@ type Discovery struct {
 	TokenEndpoint      string   `json:"token_endpoint"`
 	APIBase            string   `json:"api_base"`
 	Scopes             []string `json:"scopes"`
+
+	// Server is the URL discovery was fetched from, which every other URL
+	// the flow is handed must share an origin with.
+	Server string `json:"-"`
 }
 
 // Release is a published snapshot of an environment.
@@ -112,7 +116,37 @@ func Discover(ctx context.Context, server string) (*Discovery, error) {
 		return nil, err
 	}
 
+	// The login is posted wherever these point. A server answering for a
+	// URL the user chose must not be able to send the device flow, and the
+	// token it returns, to some other host.
+	for name, endpoint := range map[string]string{
+		"device_code_endpoint": wrapper.Data.DeviceCodeEndpoint,
+		"token_endpoint":       wrapper.Data.TokenEndpoint,
+	} {
+		if !SameOrigin(endpoint, server) {
+			return nil, fmt.Errorf("the server's %s (%q) is not on %s; refusing to log in there", name, endpoint, server)
+		}
+	}
+
+	wrapper.Data.Server = server
+
 	return &wrapper.Data, nil
+}
+
+// SameOrigin reports whether url has the same scheme, host and port as server.
+func SameOrigin(rawURL, server string) bool {
+	candidate, err := url.Parse(rawURL)
+	if err != nil || candidate.Host == "" {
+		return false
+	}
+
+	origin, err := url.Parse(strings.TrimSpace(server))
+	if err != nil {
+		return false
+	}
+
+	return strings.EqualFold(candidate.Scheme, origin.Scheme) &&
+		strings.EqualFold(candidate.Host, origin.Host)
 }
 
 // Projects lists everything the signed in user can reach.

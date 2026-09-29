@@ -52,6 +52,13 @@ func RequestDeviceCode(ctx context.Context, discovery *api.Discovery) (*DeviceCo
 		return nil, fmt.Errorf("the server did not hand out a device code: %s", response)
 	}
 
+	// The user is told to open this and type the code there: pointing it
+	// at a look-alike host is exactly how a device-code phish works.
+	if !api.SameOrigin(code.VerificationURI, discovery.Server) {
+		return nil, fmt.Errorf("the server asked you to approve the login at %q, which is not on %s; refusing",
+			code.VerificationURI, discovery.Server)
+	}
+
 	if code.Interval <= 0 {
 		code.Interval = 5
 	}

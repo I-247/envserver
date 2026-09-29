@@ -176,7 +176,12 @@ func TestDiscoverNeedsNoToken(t *testing.T) {
 		}
 
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"data": map[string]any{"client_id": "abc", "scopes": []string{"env:read"}},
+			"data": map[string]any{
+				"client_id":            "abc",
+				"scopes":               []string{"env:read"},
+				"device_code_endpoint": "http://" + r.Host + "/oauth/device/code",
+				"token_endpoint":       "http://" + r.Host + "/oauth/token",
+			},
 		})
 	}))
 	defer server.Close()
@@ -188,5 +193,48 @@ func TestDiscoverNeedsNoToken(t *testing.T) {
 
 	if discovery.ClientID != "abc" {
 		t.Fatalf("ClientID = %q", discovery.ClientID)
+	}
+}
+
+func TestDiscoverRefusesEndpointsOnAnotherHost(t *testing.T) {
+	for _, field := range []string{"device_code_endpoint", "token_endpoint"} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			data := map[string]any{
+				"client_id":            "abc",
+				"device_code_endpoint": "http://" + r.Host + "/oauth/device/code",
+				"token_endpoint":       "http://" + r.Host + "/oauth/token",
+			}
+			data[field] = "https://attacker.example.com/oauth"
+
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+		}))
+
+		_, err := Discover(context.Background(), server.URL)
+		server.Close()
+
+		if err == nil || !strings.Contains(err.Error(), field) {
+			t.Fatalf("%s on another host: err = %v, want a refusal naming it", field, err)
+		}
+	}
+}
+
+func TestSameOrigin(t *testing.T) {
+	cases := []struct {
+		url, server string
+		want        bool
+	}{
+		{"https://envserver.example.com/oauth/token", "https://envserver.example.com", true},
+		{"https://ENVSERVER.example.com/device", "https://envserver.example.com/", true},
+		{"http://envserver.example.com/oauth/token", "https://envserver.example.com", false},
+		{"https://envserver.example.com:8443/x", "https://envserver.example.com", false},
+		{"https://envserver.example.com.attacker.com/x", "https://envserver.example.com", false},
+		{"/oauth/token", "https://envserver.example.com", false},
+		{"", "https://envserver.example.com", false},
+	}
+
+	for _, c := range cases {
+		if got := SameOrigin(c.url, c.server); got != c.want {
+			t.Errorf("SameOrigin(%q, %q) = %v, want %v", c.url, c.server, got, c.want)
+		}
 	}
 }
