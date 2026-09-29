@@ -193,11 +193,30 @@ envclient update --check  # only report whether a newer release exists
 envclient update --force  # skip the confirmation (or reinstall the current version)
 ```
 
-It downloads the release archive for your OS and architecture, checks it
-against the published `checksums.txt`, and replaces this binary in place —
-the same one you'd get from re-running `install.sh`, without leaving the
-terminal. On a machine with no terminal to confirm at, `--force` is required,
-the same rule `pull` follows.
+It first checks the Sigstore signature on the release's `checksums.txt`,
+then downloads the archive for your OS and architecture, checks it against
+those checksums, and replaces this binary in place — the same one you'd get
+from re-running `install.sh`, without leaving the terminal. A release that
+is unsigned, or signed by anything other than this repository's release
+workflow for that exact tag, is refused. It never installs an older version.
+On a machine with no terminal to confirm at, `--force` is required, the same
+rule `pull` follows.
+
+### Verifying a release
+
+Every release has `checksums.txt.sigstore.json`: a keyless Sigstore
+signature over `checksums.txt`, made by the release workflow. `install.sh`
+checks it when `cosign` is installed (set `ENVCLIENT_REQUIRE_SIGNATURE=1`
+to refuse to install without it). By hand:
+
+```shell
+cosign verify-blob \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity https://github.com/I-247/envserver/.github/workflows/release.yml@refs/tags/vX.Y.Z \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+sha256sum --check --ignore-missing checksums.txt
+```
 
 ```shell
 go test ./...
