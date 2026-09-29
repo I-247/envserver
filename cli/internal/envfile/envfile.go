@@ -145,7 +145,14 @@ func (f *File) Values() map[string]string {
 // Writing to the first occurrence keeps the file's layout, and any later
 // duplicate is dropped: leaving one behind would shadow the value we just
 // wrote, so the tool would report a change it did not really make.
+//
+// A key that is not a valid name is ignored: it came from the server, and a
+// newline or '=' in it would write a line of its own choosing into the file.
 func (f *File) Set(key, value string) {
+	if !ValidKey(key) {
+		return
+	}
+
 	entry := key + "=" + formatValue(value)
 	written := false
 
@@ -229,6 +236,11 @@ func Plan(f *File, values map[string]string, options MergeOptions) MergeResult {
 		var kind ChangeKind
 
 		switch {
+		case !ValidKey(key):
+			// Never written, so reported as skipped rather than as a
+			// change that did not happen.
+			kind = KindSkipped
+			result.Skipped++
 		case !onServer:
 			kind = KindRemoved
 			result.Removed++
@@ -299,10 +311,16 @@ func (f *File) String() string {
 }
 
 // Render writes a fresh .env file from a map, sorted by key.
+//
+// Keys that are not valid names are left out, for the same reason as in Set.
 func Render(values map[string]string) string {
 	var b strings.Builder
 
 	for _, key := range sortedKeys(values) {
+		if !ValidKey(key) {
+			continue
+		}
+
 		fmt.Fprintf(&b, "%s=%s\n", key, formatValue(values[key]))
 	}
 
@@ -330,6 +348,13 @@ func keyOf(raw string) string {
 	}
 
 	return name
+}
+
+// ValidKey reports whether name can be written as a .env key: letters,
+// digits and underscores, not starting with a digit. The same rule the
+// server enforces on a variable key.
+func ValidKey(name string) bool {
+	return name != "" && isValidKey(name)
 }
 
 func isValidKey(name string) bool {

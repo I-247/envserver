@@ -636,6 +636,12 @@ func childEnvironment(variables map[string]string) []string {
 	}
 
 	for key, value := range variables {
+		// An '=' in a key would shift where the name ends; skip anything
+		// the server should never have sent.
+		if !envfile.ValidKey(key) {
+			continue
+		}
+
 		merged = append(merged, key+"="+value)
 	}
 
