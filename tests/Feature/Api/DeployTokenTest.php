@@ -4,6 +4,7 @@ use App\Actions\DeployTokens\CreateDeployToken;
 use App\Actions\Releases\PublishRelease;
 use App\Actions\Variables\AttachVariableToEnvironment;
 use App\Actions\Variables\CreateVariable;
+use App\Actions\Variables\PushVariables;
 use App\Actions\Variables\UpdateVariableValue;
 use App\Data\NewDeployToken;
 use App\Enums\AuditAction;
@@ -190,6 +191,36 @@ it('pushes variables with a token granted the write scope', function () {
     expect($this->environment->fresh()->variables()->where('key', 'APP_ENV')->exists())->toBeTrue();
 });
 
+it('does not let a token change a value other environments share', function () {
+    $staging = Environment::factory()->for($this->project)->create(['slug' => 'staging', 'auto_publish' => false]);
+    $variable = app(CreateVariable::class)->handle($this->team, 'DB_HOST', 'db.internal', ownerProject: $this->project);
+    app(AttachVariableToEnvironment::class)->handle($variable, $this->environment);
+    app(AttachVariableToEnvironment::class)->handle($variable, $staging);
+
+    $token = issueDeployToken(scopes: ['env:read', 'env:write']);
+
+    $this->withToken(accessTokenFor($token, 'env:write'))
+        ->postJson('/api/v1/deploy/variables', ['variables' => ['DB_HOST' => 'attacker.example.com', 'NEW_KEY' => 'x']])
+        ->assertOk()
+        ->assertJsonPath('data.updated', 0)
+        ->assertJsonPath('data.created', 1)
+        ->assertJsonPath('data.refused', ['DB_HOST']);
+
+    expect($variable->fresh()->currentVersion()->reveal())->toBe('db.internal');
+});
+
+it('does not let a push change a variable its project only borrows', function () {
+    $owner = Project::factory()->for($this->team)->create();
+    $variable = app(CreateVariable::class)->handle($this->team, 'SHARED_SECRET', 'from-owner', ownerProject: $owner);
+    app(AttachVariableToEnvironment::class)->handle($variable, $this->environment);
+
+    $result = app(PushVariables::class)
+        ->handle($this->environment, ['SHARED_SECRET' => 'overwritten'], $this->user);
+
+    expect($result['refused'])->toBe(['SHARED_SECRET'])
+        ->and($variable->fresh()->currentVersion()->reveal())->toBe('from-owner');
+});
+
 it('refuses a push from a token that was not granted the write scope', function () {
     $token = issueDeployToken(scopes: ['env:read']);
 
@@ -226,3 +257,15 @@ it('counts every use of the token', function () {
 
     expect($token->model->fresh()->use_count)->toBe(2);
 });
+
+it('refuses a push larger than any real env file', function (array $variables) {
+    $token = issueDeployToken(scopes: ['env:read', 'env:write']);
+
+    $this->withToken(accessTokenFor($token, 'env:write'))
+        ->postJson('/api/v1/deploy/variables', ['variables' => $variables])
+        ->assertUnprocessable();
+})->with([
+    'too many keys' => [fn () => collect(range(1, 1001))->mapWithKeys(fn ($i) => ["KEY_{$i}" => 'x'])->all()],
+    'value too long' => [['BIG' => str_repeat('a', 65536)]],
+    'key too long' => [[str_repeat('A', 256) => 'x']],
+]);

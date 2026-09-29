@@ -85,6 +85,7 @@ class DeployController extends Controller
                 'updated' => $result['updated'],
                 'unchanged' => $result['unchanged'],
                 'skipped' => $result['skipped'],
+                'refused' => $result['refused'],
             ],
         );
 

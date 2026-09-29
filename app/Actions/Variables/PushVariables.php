@@ -36,7 +36,7 @@ class PushVariables
      * Push the given values into the environment.
      *
      * @param  array<string, string>  $variables
-     * @return array{created: int, updated: int, unchanged: int, skipped: int, shared_impact: list<string>}
+     * @return array{created: int, updated: int, unchanged: int, skipped: int, refused: list<string>, shared_impact: list<string>}
      */
     public function handle(
         Environment $environment,
@@ -67,7 +67,7 @@ class PushVariables
      *
      * @param  array<string, string>  $variables
      * @param  Collection<int, Variable>  $touched
-     * @return array{created: int, updated: int, unchanged: int, skipped: int}
+     * @return array{created: int, updated: int, unchanged: int, skipped: int, refused: list<string>}
      */
     private function apply(
         Environment $environment,
@@ -79,6 +79,7 @@ class PushVariables
         $existing = $this->resolve->handle($environment)->keyBy(fn ($entry) => $entry->key);
 
         $created = $updated = $unchanged = $skipped = 0;
+        $refused = [];
 
         foreach ($variables as $key => $value) {
             $entry = $existing->get($key);
@@ -103,6 +104,13 @@ class PushVariables
                 continue;
             }
 
+            if ($this->mayNotChange($entry->variable, $environment, $author)) {
+                $skipped++;
+                $refused[] = $key;
+
+                continue;
+            }
+
             $before = $entry->version->id;
             $version = $this->update->handle($entry->variable, $value, $author);
 
@@ -121,7 +129,26 @@ class PushVariables
             'updated' => $updated,
             'unchanged' => $unchanged,
             'skipped' => $skipped,
+            'refused' => $refused,
         ];
+    }
+
+    /**
+     * Determine whether this push may not touch an existing variable.
+     *
+     * A project never changes a variable it only borrows, the same rule the
+     * portal applies. A deploy token (no author) is also held to its own
+     * environment: it is bound to exactly one, so a value that other
+     * environments share is not its to change, even within its project.
+     */
+    private function mayNotChange(Variable $variable, Environment $environment, ?User $author): bool
+    {
+        if ($variable->isBorrowedBy($environment->project)) {
+            return true;
+        }
+
+        return $author === null
+            && $variable->assignments()->where('environment_id', '!=', $environment->id)->exists();
     }
 
     /**
