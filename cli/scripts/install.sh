@@ -38,15 +38,45 @@ if [ -z "$tag" ]; then
     exit 1
 fi
 
+# The tag ends up in a URL and a file name, so it has to look like one.
+if ! printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+    echo "envclient: the latest release tag '$tag' is not a version; refusing to install" >&2
+    exit 1
+fi
+
 version=${tag#v}
 archive="envclient_${version}_${os}_${arch}.tar.gz"
-url="https://github.com/${repo}/releases/download/${tag}/${archive}"
+base="https://github.com/${repo}/releases/download/${tag}"
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 echo "envclient: downloading ${tag} for ${os}/${arch}..." >&2
-curl -fsSL "$url" -o "$tmp/$archive"
+curl -fsSL "${base}/${archive}" -o "$tmp/$archive"
+curl -fsSL "${base}/checksums.txt" -o "$tmp/checksums.txt"
+
+# Fail closed: no line for this archive, or no tool to check it, is a
+# refusal, never a skipped check.
+expected=$(awk -v name="$archive" '$2 == name { print $1 }' "$tmp/checksums.txt")
+if [ -z "$expected" ]; then
+    echo "envclient: ${archive} is not listed in checksums.txt; refusing to install" >&2
+    exit 1
+fi
+
+if command -v sha256sum >/dev/null 2>&1; then
+    actual=$(sha256sum "$tmp/$archive" | awk '{ print $1 }')
+elif command -v shasum >/dev/null 2>&1; then
+    actual=$(shasum -a 256 "$tmp/$archive" | awk '{ print $1 }')
+else
+    echo "envclient: neither sha256sum nor shasum is available to verify the download" >&2
+    exit 1
+fi
+
+if [ "$actual" != "$expected" ]; then
+    echo "envclient: checksum mismatch for ${archive} (expected ${expected}, got ${actual}); refusing to install" >&2
+    exit 1
+fi
+
 tar -xzf "$tmp/$archive" -C "$tmp" envclient
 
 if [ ! -w "$install_dir" ] && [ "$(id -u)" != 0 ]; then
