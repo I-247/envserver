@@ -37,7 +37,7 @@ use Illuminate\Support\Carbon;
  * @property-read User|null $creator
  */
 #[Fillable(['team_id', 'name', 'kind', 'url', 'signing_secret', 'events', 'active', 'created_by'])]
-#[Hidden(['signing_secret'])]
+#[Hidden(['url', 'signing_secret'])]
 class WebhookEndpoint extends Model
 {
     /**
@@ -174,6 +174,9 @@ class WebhookEndpoint extends Model
             'kind' => WebhookKind::class,
             'events' => 'array',
             'active' => 'boolean',
+            // Encrypted like the signing secret: a Slack incoming webhook
+            // URL is the credential to post into the channel.
+            'url' => 'encrypted',
             'signing_secret' => 'encrypted',
             'last_attempted_at' => 'datetime',
             'last_status' => 'integer',

@@ -7,6 +7,7 @@ use App\Enums\WebhookKind;
 use App\Models\AuditEvent;
 use App\Models\Team;
 use App\Models\WebhookEndpoint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -181,4 +182,19 @@ it('shows the endpoints on the team settings page with the url masked', function
             ->has('webhookKinds', 2)
             ->has('webhookEvents')
         );
+});
+
+it('stores the url encrypted and never serializes it', function () {
+    $endpoint = app(CreateWebhookEndpoint::class)->handle(
+        $this->team,
+        'Slack',
+        WebhookKind::Slack,
+        'https://hooks.slack.com/services/T000/B000/secret-part',
+    );
+
+    $stored = DB::table('webhook_endpoints')->where('id', $endpoint->id)->value('url');
+
+    expect($stored)->not->toContain('secret-part')
+        ->and($endpoint->fresh()->url)->toBe('https://hooks.slack.com/services/T000/B000/secret-part')
+        ->and($endpoint->toArray())->not->toHaveKey('url');
 });
