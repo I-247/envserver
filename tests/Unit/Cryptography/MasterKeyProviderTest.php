@@ -2,6 +2,7 @@
 
 use App\Cryptography\MasterKeyProvider;
 use App\Exceptions\MasterKeyMissing;
+use Illuminate\Support\Facades\Log;
 
 function base64Key(string $seed = 'a'): string
 {
@@ -53,4 +54,19 @@ it('ignores previous keys that are unusable rather than breaking unwrapping', fu
     ]);
 
     expect((new MasterKeyProvider)->all())->toHaveCount(2);
+});
+
+it('names an unusable retired key by position, never by value', function () {
+    Log::spy();
+
+    config([
+        'envserver.master_key' => base64Key('k'),
+        'envserver.previous_master_keys' => [base64Key('o'), 'base64:typo-in-this-one'],
+    ]);
+
+    expect((new MasterKeyProvider)->all())->toHaveCount(2);
+
+    Log::shouldHaveReceived('warning')
+        ->withArgs(fn (string $message) => str_contains($message, '#2') && ! str_contains($message, 'typo'))
+        ->once();
 });

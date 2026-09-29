@@ -3,6 +3,7 @@
 namespace App\Cryptography;
 
 use App\Exceptions\MasterKeyMissing;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Resolves the master key that wraps every team's data encryption key.
@@ -42,12 +43,24 @@ class MasterKeyProvider
      */
     public function all(): array
     {
-        $previous = array_filter(array_map(
-            fn (mixed $key) => $this->parse($key),
-            config('envserver.previous_master_keys', []),
-        ));
+        $previous = [];
 
-        return [$this->current(), ...array_values($previous)];
+        foreach (array_values(config('envserver.previous_master_keys', [])) as $index => $configured) {
+            $key = $this->parse($configured);
+
+            if ($key === null) {
+                // Named by position, never by value. Without this a typo in a
+                // retired key only ever shows up as "authentication failed",
+                // which reads exactly like tampering.
+                Log::warning('ENVSERVER_PREVIOUS_MASTER_KEYS entry #'.($index + 1).' is not a usable key and was skipped.');
+
+                continue;
+            }
+
+            $previous[] = $key;
+        }
+
+        return [$this->current(), ...$previous];
     }
 
     /**
