@@ -32,6 +32,10 @@ func loginCommand() *cobra.Command {
 				server = project.Server
 			}
 
+			if err := config.CheckServer(server); err != nil {
+				return err
+			}
+
 			discovery, err := api.Discover(ctx, server)
 			if err != nil {
 				return err

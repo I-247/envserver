@@ -276,3 +276,106 @@ func write(t *testing.T, path, contents string) {
 		t.Fatal(err)
 	}
 }
+
+// unsetForTest removes keys for the duration of the test; t.Setenv records
+// and restores whatever was there before.
+func unsetForTest(t *testing.T, keys ...string) {
+	t.Helper()
+
+	for _, key := range keys {
+		t.Setenv(key, "")
+		os.Unsetenv(key)
+	}
+}
+
+var deployKeys = []string{
+	"ENVCLIENT_SERVER", "ENVCLIENT_CLIENT_ID", "ENVCLIENT_CLIENT_SECRET",
+	"ENVCLIENT_SCOPES", "ENVCLIENT_CONFIG_DIR", "ENVCLIENT_VAULT_KEY",
+}
+
+func TestLoadDeployEnvTakesTheServerFromTheFileThatHoldsTheToken(t *testing.T) {
+	unsetForTest(t, deployKeys...)
+
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, ".env"),
+		"ENVCLIENT_SERVER=https://envserver.example.com\nENVCLIENT_CLIENT_ID=abc\nENVCLIENT_CLIENT_SECRET=secret\n")
+
+	LoadDeployEnv(dir)
+
+	if got := os.Getenv("ENVCLIENT_SERVER"); got != "https://envserver.example.com" {
+		t.Fatalf("ENVCLIENT_SERVER = %q, want the server from the same file as the token", got)
+	}
+}
+
+func TestLoadDeployEnvNeverPointsExportedCredentialsAtAFileServer(t *testing.T) {
+	unsetForTest(t, deployKeys...)
+	t.Setenv("ENVCLIENT_CLIENT_ID", "real-id")
+	t.Setenv("ENVCLIENT_CLIENT_SECRET", "real-secret")
+
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, ".env"),
+		"ENVCLIENT_SERVER=https://attacker.example.com\nENVCLIENT_CLIENT_ID=fake\nENVCLIENT_CLIENT_SECRET=fake\n")
+
+	LoadDeployEnv(dir)
+
+	if got, set := os.LookupEnv("ENVCLIENT_SERVER"); set {
+		t.Fatalf("ENVCLIENT_SERVER = %q, a file must not choose where exported credentials go", got)
+	}
+}
+
+func TestLoadDeployEnvDoesNotLetOneFileRedirectAnotherFilesToken(t *testing.T) {
+	unsetForTest(t, deployKeys...)
+
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, DeployEnvFileName), "ENVCLIENT_CLIENT_ID=abc\nENVCLIENT_CLIENT_SECRET=secret\n")
+	write(t, filepath.Join(dir, ".env"), "ENVCLIENT_SERVER=https://attacker.example.com\n")
+
+	LoadDeployEnv(dir)
+
+	if got, set := os.LookupEnv("ENVCLIENT_SERVER"); set {
+		t.Fatalf("ENVCLIENT_SERVER = %q, .env named a server for a token it did not supply", got)
+	}
+}
+
+func TestLoadDeployEnvLeavesLocalOnlySettingsToARealExport(t *testing.T) {
+	unsetForTest(t, deployKeys...)
+
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, ".env"),
+		"ENVCLIENT_CONFIG_DIR=./leak\nENVCLIENT_VAULT_KEY=known-to-the-repo-author\nENVCLIENT_SCOPES=env:read\n")
+
+	LoadDeployEnv(dir)
+
+	for _, key := range []string{"ENVCLIENT_CONFIG_DIR", "ENVCLIENT_VAULT_KEY"} {
+		if got, set := os.LookupEnv(key); set {
+			t.Fatalf("%s = %q, only an export may set it", key, got)
+		}
+	}
+
+	if got := os.Getenv("ENVCLIENT_SCOPES"); got != "env:read" {
+		t.Fatalf("ENVCLIENT_SCOPES = %q, want env:read", got)
+	}
+}
+
+func TestCheckServer(t *testing.T) {
+	cases := map[string]bool{
+		"https://envserver.example.com":  true,
+		"https://envserver.example.com/": true,
+		"http://127.0.0.1:8080":          true,
+		"http://[::1]:8000":              true,
+		"http://localhost:8000":          true,
+		"http://envserver.test":          true,
+		"http://app.localhost":           true,
+		"http://envserver.example.com":   false,
+		"http://10.0.0.5":                false,
+		"ftp://envserver.example.com":    false,
+		"envserver.example.com":          false,
+		"":                               false,
+	}
+
+	for server, allowed := range cases {
+		if err := CheckServer(server); (err == nil) != allowed {
+			t.Errorf("CheckServer(%q) = %v, want allowed=%v", server, err, allowed)
+		}
+	}
+}

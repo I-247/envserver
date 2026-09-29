@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -238,8 +240,21 @@ func normalise(server string) string {
 // so a "pull --prune" there can't delete the credential that ran it.
 var deployEnvFiles = []string{DeployEnvFileName, ".env"}
 
+// fileSettableKeys are the only ENVCLIENT_* keys a file in the working
+// directory may set. Everything in that directory may have come from a
+// repository somebody else wrote, so ENVCLIENT_CONFIG_DIR (where a login
+// token is written) and ENVCLIENT_VAULT_KEY (what `seal` encrypts with) are
+// only ever taken from a real export. ENVCLIENT_SERVER is settable, but see
+// LoadDeployEnv for the condition.
+var fileSettableKeys = map[string]bool{
+	"ENVCLIENT_CLIENT_ID":     true,
+	"ENVCLIENT_CLIENT_SECRET": true,
+	"ENVCLIENT_SCOPES":        true,
+	"ENVCLIENT_SERVER":        true,
+}
+
 // LoadDeployEnv reads each of deployEnvFiles in dir that exists, and sets
-// any ENVCLIENT_* key it defines that is not already in the process
+// the fileSettableKeys it defines that are not already in the process
 // environment.
 //
 // A real export always wins over either file, and the first file in the
@@ -247,6 +262,11 @@ var deployEnvFiles = []string{DeployEnvFileName, ".env"}
 // files are an optional convenience, and a machine that exported the
 // variables the normal way should never be tripped up by a file it doesn't
 // have.
+//
+// A file only names the server for credentials it supplied itself. A cloned
+// repository could otherwise ship a .env with ENVCLIENT_SERVER pointing at a
+// host of its choosing, and the client secret exported on a CI runner would
+// be sent there on the next pull.
 func LoadDeployEnv(dir string) {
 	for _, name := range deployEnvFiles {
 		contents, err := os.ReadFile(filepath.Join(dir, name))
@@ -254,8 +274,10 @@ func LoadDeployEnv(dir string) {
 			continue
 		}
 
-		for key, value := range envfile.Parse(string(contents)).Values() {
-			if !strings.HasPrefix(key, "ENVCLIENT_") {
+		values := envfile.Parse(string(contents)).Values()
+
+		for key, value := range values {
+			if !fileSettableKeys[key] || key == "ENVCLIENT_SERVER" {
 				continue
 			}
 
@@ -263,5 +285,64 @@ func LoadDeployEnv(dir string) {
 				os.Setenv(key, value)
 			}
 		}
+
+		server, named := values["ENVCLIENT_SERVER"]
+		_, exported := os.LookupEnv("ENVCLIENT_SERVER")
+
+		if named && !exported && suppliesCredentialsInUse(values) {
+			os.Setenv("ENVCLIENT_SERVER", server)
+		}
 	}
+}
+
+// suppliesCredentialsInUse reports whether the file's client id and secret
+// are the ones the process will actually authenticate with.
+func suppliesCredentialsInUse(values map[string]string) bool {
+	id, secret := values["ENVCLIENT_CLIENT_ID"], values["ENVCLIENT_CLIENT_SECRET"]
+
+	return id != "" && secret != "" &&
+		os.Getenv("ENVCLIENT_CLIENT_ID") == id &&
+		os.Getenv("ENVCLIENT_CLIENT_SECRET") == secret
+}
+
+// SameServer reports whether two server URLs name the same Envserver.
+func SameServer(a, b string) bool {
+	return strings.EqualFold(normalise(a), normalise(b))
+}
+
+// CheckServer refuses a server URL a token should never be sent to.
+//
+// Plain http is only accepted for addresses that never leave the machine or
+// the local development domain (.test, .localhost): anything else would put
+// a bearer token or client secret on the wire in the clear.
+func CheckServer(server string) error {
+	parsed, err := url.Parse(normalise(server))
+	if err != nil || parsed.Host == "" {
+		return fmt.Errorf("%q is not a server URL; expected something like https://envserver.example.com", server)
+	}
+
+	switch parsed.Scheme {
+	case "https":
+		return nil
+	case "http":
+		if isLocalHost(parsed.Hostname()) {
+			return nil
+		}
+
+		return fmt.Errorf("refusing to send credentials to %s over plain http; use https", server)
+	default:
+		return fmt.Errorf("%q is not a server URL; expected something like https://envserver.example.com", server)
+	}
+}
+
+func isLocalHost(host string) bool {
+	host = strings.ToLower(host)
+
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") || strings.HasSuffix(host, ".test") {
+		return true
+	}
+
+	ip := net.ParseIP(host)
+
+	return ip != nil && ip.IsLoopback()
 }

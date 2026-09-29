@@ -87,24 +87,59 @@ func openSession(ctx context.Context) (*session, error) {
 	}
 
 	project, err := config.FindProject(dir)
-	if err != nil {
-		if errors.Is(err, config.ErrNoProject) && deployTokenSet() && os.Getenv("ENVCLIENT_SERVER") != "" {
-			project = &config.Project{Server: os.Getenv("ENVCLIENT_SERVER")}
-		} else {
-			return nil, err
-		}
+	if err != nil && !(errors.Is(err, config.ErrNoProject) && deployTokenSet()) {
+		return nil, err
 	}
 
-	token, err := accessToken(ctx, project.Server)
+	server, err := sessionServer(project)
+	if err != nil {
+		return nil, err
+	}
+
+	if project == nil {
+		project = &config.Project{Server: server}
+	}
+
+	token, err := accessToken(ctx, server)
 	if err != nil {
 		return nil, err
 	}
 
 	return &session{
-		client:  api.New(project.Server, token),
+		client:  api.New(server, token),
 		target:  api.Target{Team: project.Team, Project: project.Name, Environment: project.Environment},
 		project: project,
 	}, nil
+}
+
+// sessionServer decides which server this session talks to.
+//
+// A deploy token belongs to ENVCLIENT_SERVER and to nothing else: the
+// envclient.json next to it came with the repository, and whoever wrote the
+// repository must not be able to point the client secret somewhere of their
+// choosing. A personal login needs no such guard, because its token is
+// stored per server and a different URL simply finds none.
+func sessionServer(project *config.Project) (string, error) {
+	if !deployTokenSet() {
+		return project.Server, config.CheckServer(project.Server)
+	}
+
+	server := os.Getenv("ENVCLIENT_SERVER")
+	if server == "" {
+		return "", errors.New("a deploy token needs ENVCLIENT_SERVER set next to it, " +
+			"so the client secret is only ever sent to the server it belongs to")
+	}
+
+	if err := config.CheckServer(server); err != nil {
+		return "", err
+	}
+
+	if project != nil && project.Server != "" && !config.SameServer(project.Server, server) {
+		return "", fmt.Errorf("envclient.json points at %s, but the deploy token belongs to %s; "+
+			"refusing to send it anywhere else", project.Server, server)
+	}
+
+	return server, nil
 }
 
 // accessToken picks the right credential for the situation: machine
