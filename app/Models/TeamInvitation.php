@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Enums\TeamRole;
 use Database\Factories\TeamInvitationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -32,6 +34,13 @@ class TeamInvitation extends Model
     use HasFactory;
 
     /**
+     * The code in plain text, known only to the request that created the
+     * invitation. The database keeps a hash: the code is a bearer credential,
+     * and a read of the table must not be enough to accept for someone else.
+     */
+    public ?string $plainCode = null;
+
+    /**
      * Bootstrap the model and its traits.
      */
     protected static function boot(): void
@@ -40,9 +49,32 @@ class TeamInvitation extends Model
 
         static::creating(function (TeamInvitation $invitation) {
             if (empty($invitation->code)) {
-                $invitation->code = Str::random(64);
+                $invitation->plainCode = Str::random(64);
+                $invitation->code = self::hashCode($invitation->plainCode);
             }
         });
+    }
+
+    /**
+     * Hash a code the way it is stored.
+     *
+     * A plain SHA-256 is enough: the code is 64 random characters, so there
+     * is nothing to brute force that a slow hash would protect.
+     */
+    public static function hashCode(string $code): string
+    {
+        return hash('sha256', $code);
+    }
+
+    /**
+     * Scope the query to the invitation a plain code belongs to.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function withCode(Builder $query, string $code): void
+    {
+        $query->where('code', self::hashCode($code));
     }
 
     /**
@@ -101,13 +133,5 @@ class TeamInvitation extends Model
             'expires_at' => 'datetime',
             'accepted_at' => 'datetime',
         ];
-    }
-
-    /**
-     * Get the route key for the model.
-     */
-    public function getRouteKeyName(): string
-    {
-        return 'code';
     }
 }

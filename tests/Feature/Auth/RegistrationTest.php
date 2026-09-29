@@ -33,12 +33,12 @@ class RegistrationTest extends TestCase
             'invited_by' => $owner->id,
         ]);
 
-        $response = $this->get(route('register', ['invitation' => $invitation->code]));
+        $response = $this->get(route('register', ['invitation' => $invitation->plainCode]));
 
         $response->assertOk();
         $response->assertInertia(fn (Assert $page) => $page
             ->component('auth/register')
-            ->where('teamInvitation.code', $invitation->code)
+            ->where('teamInvitation.code', $invitation->plainCode)
             ->where('teamInvitation.teamName', 'Laravel Team'),
         );
     }
@@ -81,7 +81,7 @@ class RegistrationTest extends TestCase
             'invited_by' => $owner->id,
         ]);
 
-        $response = $this->get(route('register', ['invitation' => $invitation->code]));
+        $response = $this->get(route('register', ['invitation' => $invitation->plainCode]));
 
         $response->assertOk();
         $response->assertInertia(fn (Assert $page) => $page->component('auth/register'));

@@ -4,21 +4,26 @@ namespace App\Notifications\Teams;
 
 use App\Models\TeamInvitation as TeamInvitationModel;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use SensitiveParameter;
 
-class TeamInvitation extends Notification implements ShouldQueue
+class TeamInvitation extends Notification implements ShouldBeEncrypted, ShouldQueue
 {
     use Queueable;
 
     /**
      * Create a new notification instance.
+     *
+     * The plain code travels with the notification because the database only
+     * has its hash; the queued payload is encrypted for the same reason.
      */
-    public function __construct(public TeamInvitationModel $invitation)
-    {
-        //
-    }
+    public function __construct(
+        public TeamInvitationModel $invitation,
+        #[SensitiveParameter] public string $code,
+    ) {}
 
     /**
      * Get the notification's delivery channels.
@@ -47,7 +52,7 @@ class TeamInvitation extends Notification implements ShouldQueue
             ->line(__('Log in and visit your dashboard to accept or decline this invitation.'))
             ->action(
                 __('Log in'),
-                route('login', ['invitation' => $this->invitation->code]),
+                route('login', ['invitation' => $this->code]),
             );
     }
 

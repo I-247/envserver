@@ -5,6 +5,7 @@ use App\Models\Team;
 use App\Models\TeamInvitation;
 use App\Models\User;
 use Illuminate\Auth\Notifications\VerifyEmail;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Support\Facades\Notification;
 
 beforeEach(function () {
@@ -101,7 +102,7 @@ it('keeps invitation codes off the team settings page', function () {
     $this->actingAs($viewer)
         ->get(route('teams.edit', $this->team))
         ->assertOk()
-        ->assertDontSee($invitation->code)
+        ->assertDontSee($invitation->plainCode)
         ->assertInertia(fn ($page) => $page
             ->where('invitations.0.id', $invitation->id)
             ->missing('invitations.0.code'));
@@ -119,4 +120,36 @@ it('cancels an invitation by its id', function () {
         ->assertRedirect(route('teams.edit', $this->team));
 
     expect(TeamInvitation::find($invitation->id))->toBeNull();
+});
+
+it('stores only a hash of the invitation code', function () {
+    $invitation = TeamInvitation::factory()->create([
+        'team_id' => $this->team->id,
+        'email' => 'pending@example.com',
+        'invited_by' => $this->owner->id,
+    ]);
+
+    expect($invitation->fresh()->code)->not->toBe($invitation->plainCode)
+        ->and($invitation->fresh()->code)->toBe(TeamInvitation::hashCode($invitation->plainCode))
+        ->and(TeamInvitation::withCode($invitation->plainCode)->sole()->id)->toBe($invitation->id)
+        ->and(TeamInvitation::withCode($invitation->fresh()->code)->exists())->toBeFalse();
+});
+
+it('mails the plain code in an encrypted queue payload', function () {
+    $this->actingAs($this->owner)
+        ->post(route('teams.invitations.store', $this->team), [
+            'email' => 'invitee@example.com',
+            'role' => TeamRole::Member->value,
+        ]);
+
+    Notification::assertSentOnDemand(
+        App\Notifications\Teams\TeamInvitation::class,
+        function ($notification) {
+            $stored = TeamInvitation::where('email', 'invitee@example.com')->sole()->code;
+
+            return $notification instanceof ShouldBeEncrypted
+                && TeamInvitation::hashCode($notification->code) === $stored
+                && str_contains($notification->toMail((object) [])->actionUrl, $notification->code);
+        },
+    );
 });

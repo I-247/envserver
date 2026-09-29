@@ -54,9 +54,9 @@ class TeamInvitationTest extends TestCase
             'invited_by' => $owner->id,
         ]);
 
-        $mail = (new TeamInvitationNotification($invitation))->toMail($invitedUser);
+        $mail = (new TeamInvitationNotification($invitation, $invitation->plainCode))->toMail($invitedUser);
 
-        $this->assertSame(route('login', ['invitation' => $invitation->code]), $mail->actionUrl);
+        $this->assertSame(route('login', ['invitation' => $invitation->plainCode]), $mail->actionUrl);
         $this->assertStringContainsString('dashboard', implode(' ', $mail->introLines));
     }
 
@@ -73,9 +73,9 @@ class TeamInvitationTest extends TestCase
             'invited_by' => $owner->id,
         ]);
 
-        $mail = (new TeamInvitationNotification($invitation))->toMail((object) []);
+        $mail = (new TeamInvitationNotification($invitation, $invitation->plainCode))->toMail((object) []);
 
-        $this->assertSame(route('login', ['invitation' => $invitation->code]), $mail->actionUrl);
+        $this->assertSame(route('login', ['invitation' => $invitation->plainCode]), $mail->actionUrl);
         $this->assertStringContainsString('log in', strtolower(implode(' ', $mail->introLines)));
     }
 

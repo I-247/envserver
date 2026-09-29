@@ -32,7 +32,7 @@ class TeamInvitationController extends Controller
         ]);
 
         Notification::route('mail', $invitation->email)
-            ->notify(new TeamInvitationNotification($invitation));
+            ->notify(new TeamInvitationNotification($invitation, $invitation->plainCode));
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Invitation sent.')]);
 

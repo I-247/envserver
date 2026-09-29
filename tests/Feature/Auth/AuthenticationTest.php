@@ -52,7 +52,7 @@ class AuthenticationTest extends TestCase
             'invited_by' => $owner->id,
         ]);
 
-        $response = $this->get(route('login', ['invitation' => $invitation->code]));
+        $response = $this->get(route('login', ['invitation' => $invitation->plainCode]));
 
         $response->assertOk();
         $response->assertInertia(fn (Assert $page) => $page
@@ -73,12 +73,12 @@ class AuthenticationTest extends TestCase
             'invited_by' => $owner->id,
         ]);
 
-        $response = $this->get(route('login', ['invitation' => $invitation->code]));
+        $response = $this->get(route('login', ['invitation' => $invitation->plainCode]));
 
         $response->assertOk();
         $response->assertInertia(fn (Assert $page) => $page
             ->component('auth/login')
-            ->where('teamInvitation.code', $invitation->code)
+            ->where('teamInvitation.code', $invitation->plainCode)
             ->where('teamInvitation.teamName', 'Laravel Team'),
         );
     }

@@ -41,7 +41,7 @@ export type TeamInvitationContext = {
 };
 
 export type DashboardInvitation = {
-    code: string;
+    id: number;
     inviterName: string;
     team: {
         name: string;

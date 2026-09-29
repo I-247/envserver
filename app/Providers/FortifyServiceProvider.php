@@ -155,7 +155,7 @@ class FortifyServiceProvider extends ServiceProvider
 
         $invitation = TeamInvitation::query()
             ->with('team')
-            ->where('code', $invitationCode)
+            ->withCode($invitationCode)
             ->whereNull('accepted_at')
             ->where(fn ($query) => $query
                 ->whereNull('expires_at')
@@ -167,7 +167,7 @@ class FortifyServiceProvider extends ServiceProvider
         }
 
         return [
-            'code' => $invitation->code,
+            'code' => $invitationCode,
             'teamName' => $invitation->team->name,
         ];
     }
