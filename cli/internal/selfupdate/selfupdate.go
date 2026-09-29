@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -96,7 +97,7 @@ func get(ctx context.Context, client *http.Client, url string) ([]byte, error) {
 	}
 
 	if response.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("nothing found at %s — has a release been published yet?", url)
+		return nil, fmt.Errorf("nothing found at %s — has a release been published yet? %w", url, errNotFound)
 	}
 
 	if response.StatusCode >= 400 {
@@ -104,6 +105,48 @@ func get(ctx context.Context, client *http.Client, url string) ([]byte, error) {
 	}
 
 	return body, nil
+}
+
+// errNotFound marks a 404, so a missing signature can be told apart from a
+// network failure.
+var errNotFound = errors.New("not found")
+
+// FetchVerified downloads a release archive and proves it came from this
+// repository's release workflow.
+//
+// Order matters: the signature over checksums.txt is checked before any
+// checksum in it is believed, and the archive only after that. A release
+// without a signature is refused outright; there is no fallback to the
+// checksum alone, since whoever could replace the archive could replace
+// checksums.txt next to it.
+func FetchVerified(ctx context.Context, client *http.Client, verifier Verifier, tag, name string) ([]byte, error) {
+	checksums, err := Download(ctx, client, tag, "checksums.txt")
+	if err != nil {
+		return nil, err
+	}
+
+	signature, err := Download(ctx, client, tag, SignatureAsset)
+	if errors.Is(err, errNotFound) {
+		return nil, fmt.Errorf("%w (%s has no %s); refusing to install it", ErrUnsigned, tag, SignatureAsset)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if err := verifier.Verify(ctx, checksums, signature, tag); err != nil {
+		return nil, fmt.Errorf("%w; refusing to install %s", err, tag)
+	}
+
+	archive, err := Download(ctx, client, tag, name)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := VerifyChecksum(archive, checksums, name); err != nil {
+		return nil, err
+	}
+
+	return archive, nil
 }
 
 // VerifyChecksum checks an archive's sha256 against the line naming it in a

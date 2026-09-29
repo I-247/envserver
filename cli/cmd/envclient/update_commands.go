@@ -23,8 +23,9 @@ func updateCommand() *cobra.Command {
 		Use:   "update",
 		Short: "Update envclient to the latest release",
 		Long: "Downloads the latest envclient release for this OS and architecture,\n" +
-			"checks it against the published checksums, and replaces this binary\n" +
-			"in place.",
+			"checks that its checksums were signed by Envserver's release workflow\n" +
+			"(Sigstore), checks the archive against them, and replaces this binary\n" +
+			"in place. An unsigned release is never installed.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
@@ -87,17 +88,8 @@ func updateCommand() *cobra.Command {
 
 			p.Note("Downloading %s...", name)
 
-			archive, err := selfupdate.Download(ctx, client, release.TagName, name)
+			archive, err := selfupdate.FetchVerified(ctx, client, selfupdate.SigstoreVerifier{}, release.TagName, name)
 			if err != nil {
-				return err
-			}
-
-			checksums, err := selfupdate.Download(ctx, client, release.TagName, "checksums.txt")
-			if err != nil {
-				return err
-			}
-
-			if err := selfupdate.VerifyChecksum(archive, checksums, name); err != nil {
 				return err
 			}
 
