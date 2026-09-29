@@ -48,6 +48,12 @@ func updateCommand() *cobra.Command {
 				return nil
 			}
 
+			// Not even --force skips this: it answers "no terminal to
+			// confirm at", not "install whatever GitHub calls latest".
+			if err := selfupdate.CheckUpgrade(version, latest); err != nil {
+				return err
+			}
+
 			if check {
 				p.Info("Run %s to install it.", p.Bold("envclient update"))
 

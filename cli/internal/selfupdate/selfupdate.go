@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -26,6 +27,14 @@ const Repo = "I-247/envserver"
 var (
 	APIBase      = "https://api.github.com"
 	DownloadBase = "https://github.com"
+)
+
+// MaxDownload caps a release asset or API response, and MaxBinary the
+// binary unpacked from the archive: the envclient binary is a few MB, so
+// anything near these is not a real release.
+const (
+	MaxDownload int64 = 100 << 20
+	MaxBinary   int64 = 200 << 20
 )
 
 // Release is the subset of a GitHub release this package needs.
@@ -81,7 +90,7 @@ func get(ctx context.Context, client *http.Client, url string) ([]byte, error) {
 	}
 	defer response.Body.Close()
 
-	body, err := io.ReadAll(response.Body)
+	body, err := readLimited(response.Body, MaxDownload, url)
 	if err != nil {
 		return nil, err
 	}
@@ -143,10 +152,103 @@ func ExtractBinary(archive []byte, name string) ([]byte, error) {
 			continue
 		}
 
-		return io.ReadAll(reader)
+		return readLimited(reader, MaxBinary, name)
 	}
 
 	return nil, fmt.Errorf("%s not found in the archive", name)
+}
+
+// readLimited reads at most limit bytes and fails on anything larger, rather
+// than letting a response or a decompressing archive fill memory.
+func readLimited(r io.Reader, limit int64, what string) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+
+	if int64(len(body)) > limit {
+		return nil, fmt.Errorf("%s is larger than %d MB; refusing to read it", what, limit>>20)
+	}
+
+	return body, nil
+}
+
+// CheckUpgrade refuses to replace current with an older latest.
+//
+// "Latest" is whatever GitHub calls the newest release, and a release that
+// was re-marked, or a tampered one, could point at an older build with a
+// known flaw. A development build ("dev") and a current version that does
+// not parse can always be replaced; a latest that does not parse cannot.
+func CheckUpgrade(current, latest string) error {
+	next, ok := parseVersion(latest)
+	if !ok {
+		return fmt.Errorf("the latest release %q is not a version number; refusing to install it", latest)
+	}
+
+	installed, ok := parseVersion(current)
+	if !ok {
+		return nil
+	}
+
+	if compareVersions(next, installed) < 0 {
+		return fmt.Errorf("the latest release (%s) is older than this one (%s); refusing to downgrade", latest, current)
+	}
+
+	return nil
+}
+
+// version is major, minor, patch, and whether a pre-release suffix followed.
+type version struct {
+	parts      [3]int
+	preRelease bool
+}
+
+func parseVersion(text string) (version, bool) {
+	text = strings.TrimPrefix(strings.TrimSpace(text), "v")
+	text, _, _ = strings.Cut(text, "+")
+	core, pre, hasPre := strings.Cut(text, "-")
+
+	fields := strings.Split(core, ".")
+	if len(fields) != 3 {
+		return version{}, false
+	}
+
+	var v version
+
+	for i, field := range fields {
+		n, err := strconv.Atoi(field)
+		if err != nil || n < 0 {
+			return version{}, false
+		}
+
+		v.parts[i] = n
+	}
+
+	v.preRelease = hasPre && pre != ""
+
+	return v, true
+}
+
+// compareVersions orders two versions, a pre-release below its release.
+func compareVersions(a, b version) int {
+	for i := range a.parts {
+		if a.parts[i] != b.parts[i] {
+			if a.parts[i] < b.parts[i] {
+				return -1
+			}
+
+			return 1
+		}
+	}
+
+	switch {
+	case a.preRelease == b.preRelease:
+		return 0
+	case a.preRelease:
+		return -1
+	default:
+		return 1
+	}
 }
 
 // Install atomically replaces the file at dest with binary.
