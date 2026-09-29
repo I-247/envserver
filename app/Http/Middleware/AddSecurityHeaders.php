@@ -3,17 +3,24 @@
 namespace App\Http\Middleware;
 
 use Closure;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as IlluminateResponse;
+use Illuminate\Support\Facades\Vite;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Adds the response headers a page holding secrets should always carry.
  *
- * The CSP is deliberately limited to what cannot break the Vite/Inertia
- * frontend: no framing (the reveal and export buttons must not be clickable
- * through somebody else's page), no plugins, and forms and <base> only to
- * this origin. Script sources are left alone; tightening those needs nonces
- * wired through the Vite tags first.
+ * No framing (the reveal and export buttons must not be clickable through
+ * somebody else's page), no plugins, and forms and <base> only to this
+ * origin, on every response.
+ *
+ * Pages rendered from the Inertia root view also get a nonce-based
+ * script-src: Vite puts the nonce on its tags, app.blade.php on its one
+ * inline script, and 'strict-dynamic' lets those load their own chunks. An
+ * injected <script> has no nonce and does not run. Other HTML (Horizon, the
+ * debug error page) keeps its inline scripts working by not getting one.
  */
 class AddSecurityHeaders
 {
@@ -24,9 +31,19 @@ class AddSecurityHeaders
      */
     public function handle(Request $request, Closure $next): Response
     {
+        Vite::useCspNonce();
+
         $response = $next($request);
 
-        $response->headers->set('Content-Security-Policy', "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'", false);
+        $policy = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'";
+
+        if ($this->rendersTheApp($response)) {
+            // 'self' is only a fallback for browsers without CSP 3, which
+            // ignore 'strict-dynamic'; the others ignore 'self' next to it.
+            $policy .= "; script-src 'nonce-".Vite::cspNonce()."' 'strict-dynamic' 'self'";
+        }
+
+        $response->headers->set('Content-Security-Policy', $policy, false);
         $response->headers->set('X-Frame-Options', 'DENY', false);
         $response->headers->set('X-Content-Type-Options', 'nosniff', false);
         // Invitation codes and signed links travel in URLs; they must not
@@ -39,5 +56,15 @@ class AddSecurityHeaders
         }
 
         return $response;
+    }
+
+    /**
+     * Determine whether the response is a full page from the Inertia root view.
+     */
+    private function rendersTheApp(Response $response): bool
+    {
+        return $response instanceof IlluminateResponse
+            && $response->original instanceof View
+            && $response->original->name() === 'app';
     }
 }
