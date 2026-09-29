@@ -15,6 +15,7 @@ use App\Models\Environment;
 use App\Models\Project;
 use App\Models\Team;
 use App\Models\Variable;
+use App\Support\SecretAccessWindow;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -151,6 +152,14 @@ class VariableController extends Controller
         Gate::authorize('viewSecrets', $project);
 
         abort_if($variable->currentVersion() === null, 404);
+
+        // 423 rather than 403: the user may see this value, they only have
+        // to confirm their password first. The dialog asks and tries again.
+        if (! SecretAccessWindow::isOpen($request)) {
+            return response()->json([
+                'message' => __('Confirm your password to reveal secrets.'),
+            ], 423);
+        }
 
         $audit->handle($currentTeam, AuditAction::SecretRevealed, $request->user(), $variable, [
             'key' => $variable->key,

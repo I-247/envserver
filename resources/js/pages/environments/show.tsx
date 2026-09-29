@@ -49,6 +49,7 @@ import { Label } from '@/components/ui/label';
 import VariableValue from '@/components/variable-value';
 import environments, { show as environmentShow } from '@/routes/environments';
 import { index as projectsIndex, show as projectShow } from '@/routes/projects';
+import { confirm as confirmSecretAccess } from '@/routes/secrets';
 import type {
     EnvironmentPermissions,
     EnvironmentSummary,
@@ -675,6 +676,9 @@ export default function EnvironmentShow({
                                                                 ...args,
                                                                 variable.id,
                                                             ],
+                                                        )}
+                                                        confirmUrl={confirmSecretAccess.url(
+                                                            teamSlug,
                                                         )}
                                                     />
                                                 </td>

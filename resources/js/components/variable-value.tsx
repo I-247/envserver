@@ -2,6 +2,9 @@ import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import Code from '@/components/code';
 import CopyButton from '@/components/copy-button';
+import InputError from '@/components/input-error';
+import PasswordInput from '@/components/password-input';
+import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
@@ -10,10 +13,13 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { csrfToken } from '@/lib/csrf';
 
 type Props = {
     variableKey: string;
     revealUrl: string;
+    confirmUrl: string;
     canReveal: boolean;
 };
 
@@ -26,31 +32,30 @@ type Props = {
  * the table entirely: a long secret gets room to wrap instead of being
  * truncated, only one value is ever on screen, and closing the dialog throws
  * the plaintext away again.
+ *
+ * The server answers 423 until the password was confirmed in the last few
+ * minutes (SecretAccessWindow). The dialog then asks for it in place and tries
+ * again, so one confirmation covers the next reveals without a page reload.
  */
 export default function VariableValue({
     variableKey,
     revealUrl,
+    confirmUrl,
     canReveal,
 }: Props) {
     const [open, setOpen] = useState(false);
     const [value, setValue] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [failed, setFailed] = useState(false);
+    const [needsPassword, setNeedsPassword] = useState(false);
+    const [password, setPassword] = useState('');
+    const [passwordError, setPasswordError] = useState<string | undefined>();
 
     if (!canReveal) {
         return <Code className="text-muted-foreground">••••••••</Code>;
     }
 
-    const toggle = async (next: boolean) => {
-        setOpen(next);
-
-        if (!next) {
-            setValue(null);
-            setFailed(false);
-
-            return;
-        }
-
+    const reveal = async () => {
         setLoading(true);
         setFailed(false);
 
@@ -59,16 +64,77 @@ export default function VariableValue({
                 headers: { Accept: 'application/json' },
             });
 
+            if (response.status === 423) {
+                setNeedsPassword(true);
+
+                return;
+            }
+
             if (!response.ok) {
                 throw new Error(String(response.status));
             }
 
+            setNeedsPassword(false);
             setValue((await response.json()).value);
         } catch {
             setFailed(true);
         } finally {
             setLoading(false);
         }
+    };
+
+    const confirm = async (event: React.FormEvent) => {
+        event.preventDefault();
+        setLoading(true);
+        setPasswordError(undefined);
+
+        try {
+            const response = await fetch(confirmUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-XSRF-TOKEN': csrfToken(),
+                },
+                body: JSON.stringify({ password }),
+            });
+
+            if (!response.ok) {
+                const body = await response.json().catch(() => null);
+
+                setPasswordError(
+                    body?.errors?.password?.[0] ??
+                        (response.status === 429
+                            ? 'Too many attempts. Try again in a minute.'
+                            : 'Could not confirm your password.'),
+                );
+                setLoading(false);
+
+                return;
+            }
+
+            setPassword('');
+            await reveal();
+        } catch {
+            setPasswordError('Could not reach the server.');
+            setLoading(false);
+        }
+    };
+
+    const toggle = async (next: boolean) => {
+        setOpen(next);
+
+        if (!next) {
+            setValue(null);
+            setFailed(false);
+            setNeedsPassword(false);
+            setPassword('');
+            setPasswordError(undefined);
+
+            return;
+        }
+
+        await reveal();
     };
 
     return (
@@ -93,7 +159,39 @@ export default function VariableValue({
                 </DialogHeader>
                 <div className="relative rounded-md border bg-muted/40">
                     <div className="max-h-64 overflow-auto p-3 pr-12 text-sm">
-                        {loading ? (
+                        {needsPassword ? (
+                            <form
+                                onSubmit={confirm}
+                                className="grid gap-2"
+                                data-test="reveal-password-form"
+                            >
+                                <Label
+                                    htmlFor={`reveal-password-${variableKey}`}
+                                >
+                                    Confirm your password to reveal secrets
+                                </Label>
+                                <PasswordInput
+                                    id={`reveal-password-${variableKey}`}
+                                    name="password"
+                                    value={password}
+                                    onChange={(event) =>
+                                        setPassword(event.target.value)
+                                    }
+                                    placeholder="Your password"
+                                    autoComplete="current-password"
+                                    autoFocus
+                                    data-test="reveal-password"
+                                />
+                                <InputError message={passwordError} />
+                                <Button
+                                    type="submit"
+                                    disabled={loading || password === ''}
+                                    className="justify-self-start"
+                                >
+                                    Reveal
+                                </Button>
+                            </form>
+                        ) : loading ? (
                             <div
                                 className="flex items-center gap-2 text-muted-foreground"
                                 data-test="reveal-loading"
@@ -115,7 +213,7 @@ export default function VariableValue({
                         )}
                     </div>
 
-                    {!loading && !failed ? (
+                    {!loading && !failed && !needsPassword ? (
                         <CopyButton
                             value={value ?? ''}
                             variant="ghost"

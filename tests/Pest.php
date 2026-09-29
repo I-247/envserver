@@ -4,6 +4,7 @@ use App\Enums\TeamRole;
 use App\Models\Team;
 use App\Models\User;
 use App\Support\HostResolver;
+use App\Support\SecretAccessWindow;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -65,4 +66,12 @@ function fakeDns(array $records = ['hooks.example.com' => ['93.184.215.14'], 'ho
             return $this->records[strtolower($host)] ?? [];
         }
     });
+}
+
+/**
+ * Act as if the current user confirmed their password for revealing secrets just now.
+ */
+function confirmSecretAccess(): void
+{
+    test()->withSession([SecretAccessWindow::SESSION_KEY => now()->getTimestamp()]);
 }

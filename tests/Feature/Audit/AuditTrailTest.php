@@ -68,6 +68,7 @@ it('does not record a save that changed nothing', function () {
 it('records that someone looked at a secret', function () {
     $user = actingAsTeamMember(TeamRole::Member, $this->team);
     $variable = auditedVariable(value: 'super-secret-value');
+    confirmSecretAccess();
 
     $this->getJson("/acme/projects/webshop/environments/production/variables/{$variable->id}/reveal")
         ->assertOk();

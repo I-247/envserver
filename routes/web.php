@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Audit\AuditController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Environments\ConfirmSecretAccessController;
 use App\Http\Controllers\Environments\DeployTokenController;
 use App\Http\Controllers\Environments\EnvFileDownloadController;
 use App\Http\Controllers\Environments\EnvFileImportController;
@@ -27,6 +28,12 @@ Route::prefix('{current_team}')
         Route::get('dashboard', DashboardController::class)->name('dashboard');
 
         Route::get('audit', AuditController::class)->name('audit');
+
+        // Opens a few minutes in which single values reveal; see
+        // SecretAccessWindow. Throttled like every other password field.
+        Route::post('secrets/confirm', ConfirmSecretAccessController::class)
+            ->middleware('throttle:6,1')
+            ->name('secrets.confirm');
 
         Route::get('projects', [ProjectController::class, 'index'])->name('projects.index');
         Route::post('projects', [ProjectController::class, 'store'])->name('projects.store');

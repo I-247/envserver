@@ -4,7 +4,9 @@ use App\Actions\Releases\PublishRelease;
 use App\Actions\Variables\AttachVariableToEnvironment;
 use App\Actions\Variables\CreateVariable;
 use App\Actions\Variables\UpdateVariableValue;
+use App\Enums\AuditAction;
 use App\Enums\TeamRole;
+use App\Models\AuditEvent;
 use App\Models\Environment;
 use App\Models\Project;
 use App\Models\Release;
@@ -256,6 +258,7 @@ describe('revealing a value', function () {
     it('returns the plaintext to someone allowed to see it', function () {
         actingAsTeamMember(TeamRole::Member, $this->team);
         $variable = portalVariable('A', 'super-secret-value');
+        confirmSecretAccess();
 
         $this->getJson(portalUrl("/variables/{$variable->id}/reveal"))
             ->assertOk()
@@ -270,9 +273,39 @@ describe('revealing a value', function () {
             ->assertForbidden();
     });
 
+    it('asks for the password before the first value, and records nothing yet', function () {
+        actingAsTeamMember(TeamRole::Member, $this->team);
+        $variable = portalVariable('A', 'super-secret-value');
+
+        $this->getJson(portalUrl("/variables/{$variable->id}/reveal"))
+            ->assertStatus(423)
+            ->assertDontSee('super-secret-value');
+
+        expect(AuditEvent::where('action', AuditAction::SecretRevealed)->exists())->toBeFalse();
+    });
+
+    it('reveals for a few minutes after the password was confirmed', function () {
+        actingAsTeamMember(TeamRole::Member, $this->team);
+        $variable = portalVariable('A', 'super-secret-value');
+
+        $this->postJson('/'.$this->team->slug.'/secrets/confirm', ['password' => 'wrong'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('password');
+
+        $this->postJson('/'.$this->team->slug.'/secrets/confirm', ['password' => 'password'])
+            ->assertOk();
+
+        $this->getJson(portalUrl("/variables/{$variable->id}/reveal"))->assertOk();
+
+        $this->travel(config('envserver.reveal_confirmation_minutes'))->minutes();
+
+        $this->getJson(portalUrl("/variables/{$variable->id}/reveal"))->assertStatus(423);
+    });
+
     it('stops someone walking through every value one request at a time', function () {
         actingAsTeamMember(TeamRole::Member, $this->team);
         $variable = portalVariable('A', 'super-secret-value');
+        confirmSecretAccess();
 
         foreach (range(1, 20) as $ignored) {
             $this->getJson(portalUrl("/variables/{$variable->id}/reveal"))->assertOk();

@@ -135,4 +135,17 @@ return [
 
     'api_requests_per_minute' => (int) env('ENVSERVER_API_REQUESTS_PER_MINUTE', 120),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Revealing Secrets
+    |--------------------------------------------------------------------------
+    |
+    | How many minutes one password confirmation lets single values be
+    | revealed in the portal. The .env export asks for the password on every
+    | download regardless.
+    |
+    */
+
+    'reveal_confirmation_minutes' => (int) env('ENVSERVER_REVEAL_CONFIRMATION_MINUTES', 10),
+
 ];
