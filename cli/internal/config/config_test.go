@@ -119,6 +119,45 @@ func TestCredentialsFileIsNotReadableByOthers(t *testing.T) {
 	}
 }
 
+func TestCredentialsFileIsNarrowedWhenItWasWider(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ENVCLIENT_CONFIG_DIR", dir)
+
+	path, _ := CredentialsPath()
+	write(t, path, "{}\n")
+
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := SaveCredentials("https://envserver.test", Credentials{AccessToken: "x"}); err != nil {
+		t.Fatal(err)
+	}
+
+	file, _ := os.Stat(path)
+	folder, _ := os.Stat(dir)
+
+	if file.Mode().Perm() != 0o600 || folder.Mode().Perm() != 0o700 {
+		t.Fatalf("file mode = %o, dir mode = %o, want 600 and 700", file.Mode().Perm(), folder.Mode().Perm())
+	}
+}
+
+func TestACorruptCredentialsFileIsNotSilentlyReplaced(t *testing.T) {
+	t.Setenv("ENVCLIENT_CONFIG_DIR", t.TempDir())
+
+	path, _ := CredentialsPath()
+	write(t, path, "{not json")
+
+	if err := SaveCredentials("https://envserver.test", Credentials{AccessToken: "x"}); err == nil {
+		t.Fatal("a corrupt file was overwritten, dropping every other login in it")
+	}
+
+	contents, _ := os.ReadFile(path)
+	if string(contents) != "{not json" {
+		t.Fatalf("file changed to %q", contents)
+	}
+}
+
 func TestForgetRemovesOnlyOneServer(t *testing.T) {
 	t.Setenv("ENVCLIENT_CONFIG_DIR", t.TempDir())
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/I-247/envserver/cli/internal/config"
 	"github.com/I-247/envserver/cli/internal/envfile"
+	"github.com/I-247/envserver/cli/internal/securefile"
 	"github.com/I-247/envserver/cli/internal/vault"
 )
 
@@ -58,7 +59,7 @@ func sealCommand() *cobra.Command {
 
 			path := vaultPath(file)
 
-			if err := os.WriteFile(path, []byte(sealed), 0o600); err != nil {
+			if err := securefile.WriteFile(path, []byte(sealed)); err != nil {
 				return err
 			}
 
@@ -114,7 +115,7 @@ func unsealCommand() *cobra.Command {
 				return nil
 			}
 
-			if err := os.WriteFile(out, []byte(rendered), 0o600); err != nil {
+			if err := securefile.WriteFile(out, []byte(rendered)); err != nil {
 				return err
 			}
 

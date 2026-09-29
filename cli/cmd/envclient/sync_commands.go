@@ -15,6 +15,7 @@ import (
 	"github.com/I-247/envserver/cli/internal/api"
 	"github.com/I-247/envserver/cli/internal/config"
 	"github.com/I-247/envserver/cli/internal/envfile"
+	"github.com/I-247/envserver/cli/internal/securefile"
 	"github.com/I-247/envserver/cli/internal/ui"
 	"github.com/I-247/envserver/cli/internal/vault"
 )
@@ -131,7 +132,7 @@ func pullCommand() *cobra.Command {
 
 			result := file.Merge(release.Variables, options)
 
-			if err := os.WriteFile(path, []byte(file.String()), 0o600); err != nil {
+			if err := securefile.WriteFile(path, []byte(file.String())); err != nil {
 				return err
 			}
 

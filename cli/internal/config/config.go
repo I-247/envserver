@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/I-247/envserver/cli/internal/envfile"
+	"github.com/I-247/envserver/cli/internal/securefile"
 )
 
 // ProjectFileName is the file committed alongside the code. It names the
@@ -178,25 +179,51 @@ func SaveCredentials(server string, credentials Credentials) error {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := securefile.PrivateDir(filepath.Dir(path)); err != nil {
 		return err
 	}
 
-	s := store{}
-	if contents, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(contents, &s)
+	s, err := readStore(path)
+	if err != nil {
+		return err
 	}
 
 	s[normalise(server)] = credentials
 
+	return writeStore(path, s)
+}
+
+// readStore reads every server's credentials, or an empty store when there
+// is no file yet.
+//
+// A file that exists but cannot be read or parsed is an error, not an empty
+// store: treating it as empty would write back only the server being saved
+// and silently drop every other login on the machine.
+func readStore(path string) (store, error) {
+	contents, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return store{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	s := store{}
+	if err := json.Unmarshal(contents, &s); err != nil {
+		return nil, fmt.Errorf("%s is corrupt; fix or remove it first: %w", path, err)
+	}
+
+	return s, nil
+}
+
+// writeStore writes the credentials file, owner only from the first byte.
+func writeStore(path string, s store) error {
 	contents, err := json.MarshalIndent(s, "", "    ")
 	if err != nil {
 		return err
 	}
 
-	// 0600 from the start: writing world readable and chmodding after would
-	// leave a window in which anyone on the box could read the token.
-	return os.WriteFile(path, append(contents, '\n'), 0o600)
+	return securefile.WriteFile(path, append(contents, '\n'))
 }
 
 // ForgetCredentials removes the credentials for a server.
@@ -206,27 +233,18 @@ func ForgetCredentials(server string) error {
 		return err
 	}
 
-	contents, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
-	if err != nil {
-		return err
-	}
 
-	var s store
-	if err := json.Unmarshal(contents, &s); err != nil {
+	s, err := readStore(path)
+	if err != nil {
 		return err
 	}
 
 	delete(s, normalise(server))
 
-	updated, err := json.MarshalIndent(s, "", "    ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(path, append(updated, '\n'), 0o600)
+	return writeStore(path, s)
 }
 
 func normalise(server string) string {
