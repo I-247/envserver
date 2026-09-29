@@ -108,8 +108,8 @@ func unsealCommand() *cobra.Command {
 				// The header goes to stderr and the values go out unstyled:
 				// stdout here is a .env someone is piping somewhere, and an
 				// escape code in it would end up inside a secret.
-				fmt.Fprintf(p.Err(), "%s\n", p.Dim(fmt.Sprintf("# %s: release %d of %s/%s, sealed %s",
-					path, payload.Release, payload.Project, payload.Environment, payload.SealedAt)))
+				p.Aside("# %s: release %d of %s/%s, sealed %s",
+					path, payload.Release, payload.Project, payload.Environment, payload.SealedAt)
 				fmt.Fprint(p.Plain().Out(), rendered)
 
 				return nil

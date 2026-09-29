@@ -597,7 +597,7 @@ func runVariables(cmd *cobra.Command, version int, file string, useVault, useRem
 		}
 
 		p := printer(cmd)
-		fmt.Fprintf(p.Err(), "%s\n", p.Dim(fmt.Sprintf("Using release %d from %s", payload.Release, path)))
+		p.Aside("Using release %d from %s", payload.Release, path)
 
 		return payload.Variables, nil
 	}

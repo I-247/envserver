@@ -97,26 +97,33 @@ func (p *Printer) paint(style, text string) string {
 	return style + strings.ReplaceAll(text, reset, reset+style) + reset
 }
 
+// printf is the one place a Printer writes a message, so that nothing the
+// server said can reach the terminal as a control sequence (see Sanitize).
+// Plain().Out() bypasses it on purpose: that stream is data, not a message.
+func (p *Printer) printf(w io.Writer, format string, a ...any) {
+	fmt.Fprint(w, Sanitize(fmt.Sprintf(format, a...), p.colour))
+}
+
 func (p *Printer) Bold(text string) string { return p.paint(bold, text) }
 func (p *Printer) Dim(text string) string  { return p.paint(dim, text) }
 
 // Title announces what a command is about to report on.
 func (p *Printer) Title(format string, a ...any) {
-	fmt.Fprintln(p.out, p.paint(bold, fmt.Sprintf(format, a...)))
+	p.printf(p.out, "%s\n", p.paint(bold, fmt.Sprintf(format, a...)))
 }
 
 // Done, Warn and Info are the three endings a command can have that are not
 // an error: it worked, it worked but read this, or here is a fact.
 func (p *Printer) Done(format string, a ...any) {
-	fmt.Fprintf(p.out, "%s %s\n", p.paint(green, "✓"), fmt.Sprintf(format, a...))
+	p.printf(p.out, "%s %s\n", p.paint(green, "✓"), fmt.Sprintf(format, a...))
 }
 
 func (p *Printer) Warn(format string, a ...any) {
-	fmt.Fprintf(p.out, "%s %s\n", p.paint(yellow, "!"), fmt.Sprintf(format, a...))
+	p.printf(p.out, "%s %s\n", p.paint(yellow, "!"), fmt.Sprintf(format, a...))
 }
 
 func (p *Printer) Info(format string, a ...any) {
-	fmt.Fprintf(p.out, "%s %s\n", p.paint(blue, "›"), fmt.Sprintf(format, a...))
+	p.printf(p.out, "%s %s\n", p.paint(blue, "›"), fmt.Sprintf(format, a...))
 }
 
 // Error reports a failure on stderr, so that a command whose real output is
@@ -127,17 +134,22 @@ func (p *Printer) Error(format string, a ...any) {
 		mark = red + mark + reset
 	}
 
-	fmt.Fprintf(p.err, "%s %s\n", mark, fmt.Sprintf(format, a...))
+	p.printf(p.err, "%s %s\n", mark, fmt.Sprintf(format, a...))
 }
 
 // Note is an indented aside under whatever was printed last.
 func (p *Printer) Note(format string, a ...any) {
-	fmt.Fprintf(p.out, "  %s\n", p.paint(dim, fmt.Sprintf(format, a...)))
+	p.printf(p.out, "  %s\n", p.paint(dim, fmt.Sprintf(format, a...)))
+}
+
+// Aside is a dim line on stderr, for context next to data on stdout.
+func (p *Printer) Aside(format string, a ...any) {
+	p.printf(p.err, "%s\n", p.paint(dim, fmt.Sprintf(format, a...)))
 }
 
 // Line writes an unstyled line.
 func (p *Printer) Line(format string, a ...any) {
-	fmt.Fprintf(p.out, format+"\n", a...)
+	p.printf(p.out, format+"\n", a...)
 }
 
 // Blank separates blocks.
@@ -169,7 +181,7 @@ func Interactive(in io.Reader) bool {
 // The question goes to stderr so that a command whose real output is data
 // does not get a prompt mixed into it.
 func (p *Printer) Confirm(in io.Reader, format string, a ...any) (bool, error) {
-	fmt.Fprintf(p.err, "%s %s %s ", p.paint(yellow, "?"), fmt.Sprintf(format, a...), p.paint(dim, "[y/N]"))
+	p.printf(p.err, "%s %s %s ", p.paint(yellow, "?"), fmt.Sprintf(format, a...), p.paint(dim, "[y/N]"))
 
 	answer, err := bufio.NewReader(in).ReadString('\n')
 	if err != nil && answer == "" {
@@ -217,7 +229,7 @@ func (p *Printer) Changes(changes []Change) {
 			style = yellow
 		}
 
-		fmt.Fprintf(p.out, "  %s %s%s%s\n",
+		p.printf(p.out, "  %s %s%s%s\n",
 			p.paint(style, change.Mark),
 			change.Key,
 			strings.Repeat(" ", width-len(change.Key)+2),
@@ -242,11 +254,11 @@ func (p *Printer) Table(header []string, rows [][]string) {
 	}
 
 	if len(header) > 0 {
-		fmt.Fprintf(p.out, "  %s\n", p.paint(dim, strings.TrimRight(row(header, widths), " ")))
+		p.printf(p.out, "  %s\n", p.paint(dim, strings.TrimRight(row(header, widths), " ")))
 	}
 
 	for _, r := range rows {
-		fmt.Fprintf(p.out, "  %s\n", strings.TrimRight(row(r, widths), " "))
+		p.printf(p.out, "  %s\n", strings.TrimRight(row(r, widths), " "))
 	}
 }
 
@@ -263,7 +275,7 @@ func (p *Printer) Field(label, value string) {
 		padding = 1
 	}
 
-	fmt.Fprintf(p.out, "  %s%s%s\n", p.paint(dim, label), strings.Repeat(" ", padding), value)
+	p.printf(p.out, "  %s%s%s\n", p.paint(dim, label), strings.Repeat(" ", padding), value)
 }
 
 // Highlight marks a value the reader has to act on, such as a device code.
