@@ -12,6 +12,7 @@ use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     Http::fake(['*' => Http::response('', 200)]);
+    fakeDns();
 
     $this->team = Team::factory()->create(['slug' => 'acme']);
 });
@@ -71,6 +72,15 @@ it('refuses a plain http address', function () {
 });
 
 it('refuses an address on the server\'s own network', function (string $url) {
+    fakeDns([
+        'localhost' => ['127.0.0.1'],
+        'localhost.' => ['127.0.0.1'],
+        '2130706433' => ['127.0.0.1'],
+        '127.1' => ['127.0.0.1'],
+        'inside.example.com' => ['10.0.0.5'],
+        'mixed.example.com' => ['93.184.215.14', '169.254.169.254'],
+    ]);
+
     actingAsTeamMember(TeamRole::Owner, $this->team);
 
     $this->post('/settings/teams/acme/webhooks', [
@@ -84,6 +94,18 @@ it('refuses an address on the server\'s own network', function (string $url) {
     'https://169.254.169.254/latest/meta-data',
     'https://10.0.0.5/hook',
     'https://192.168.1.10/hook',
+    'short loopback' => 'https://127.1/hook',
+    'decimal loopback' => 'https://2130706433/hook',
+    'private 172.16/12' => 'https://172.16.0.5/hook',
+    'carrier-grade NAT' => 'https://100.64.0.1/hook',
+    'IPv6 loopback' => 'https://[::1]/hook',
+    'IPv4-mapped IPv6' => 'https://[::ffff:127.0.0.1]/hook',
+    'IPv6 unique local' => 'https://[fd00:ec2::254]/hook',
+    'NAT64' => 'https://[64:ff9b::a00:5]/hook',
+    'name pointing inside' => 'https://inside.example.com/hook',
+    'name with one inside record' => 'https://mixed.example.com/hook',
+    'name that does not resolve' => 'https://nowhere.example.com/hook',
+    'trailing dot' => 'https://localhost./hook',
 ]);
 
 it('refuses an event that is not in the trail', function () {

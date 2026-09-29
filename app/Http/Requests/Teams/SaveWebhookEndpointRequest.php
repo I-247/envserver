@@ -4,6 +4,7 @@ namespace App\Http\Requests\Teams;
 
 use App\Enums\AuditAction;
 use App\Enums\WebhookKind;
+use App\Support\PublicAddress;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -14,19 +15,6 @@ use Illuminate\Validation\Rule;
  */
 class SaveWebhookEndpointRequest extends FormRequest
 {
-    /**
-     * Hosts a delivery is never sent to.
-     *
-     * A team admin choosing where their own events go is not a threat, but
-     * the server making the request is: an endpoint pointing at localhost or
-     * at a cloud metadata address turns the queue worker into a way to reach
-     * things only it can see. This is a check on the hostname as written and
-     * not a defence against a name that resolves somewhere else later.
-     *
-     * @var list<string>
-     */
-    private const BLOCKED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '::1', '169.254.169.254', 'metadata.google.internal'];
-
     /**
      * Get the validation rules that apply to the request.
      *
@@ -49,15 +37,23 @@ class SaveWebhookEndpointRequest extends FormRequest
     /**
      * Reject an endpoint aimed at the server itself.
      *
+     * A team admin choosing where their own events go is not a threat, but
+     * the server making the request is: an endpoint pointing at localhost or
+     * at a cloud metadata address turns the queue worker into a way to reach
+     * things only it can see. The host is resolved here, and again by
+     * DeliverWebhook on every send, because a name can be repointed later.
+     *
      * @return array<int, callable>
      */
     public function after(): array
     {
         return [
             function (Validator $validator) {
-                $host = strtolower((string) parse_url((string) $this->input('url'), PHP_URL_HOST));
+                if ($validator->errors()->has('url')) {
+                    return;
+                }
 
-                if (in_array($host, self::BLOCKED_HOSTS, true) || str_starts_with($host, '192.168.') || str_starts_with($host, '10.')) {
+                if (app(PublicAddress::class)->addressesFor((string) $this->input('url')) === null) {
                     $validator->errors()->add('url', 'That address is on the server\'s own network, so a delivery would never leave it.');
                 }
             },

@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Enums\WebhookKind;
 use App\Models\WebhookEndpoint;
+use App\Support\PublicAddress;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Http;
@@ -44,14 +45,27 @@ class DeliverWebhook implements ShouldQueue
     /**
      * Send the event.
      */
-    public function handle(): void
+    public function handle(PublicAddress $publicAddress): void
     {
         $body = json_encode($this->body(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+        // Checked again on every send: the name was public when the endpoint
+        // was saved, but whoever controls its DNS can repoint it since.
+        $addresses = $publicAddress->addressesFor($this->endpoint->url);
+
+        if ($addresses === null) {
+            $this->endpoint->recordFailure(null, 'The address no longer resolves to a public server.', $this->lastAttempt());
+
+            throw new RuntimeException("Webhook delivery to {$this->endpoint->name} was refused: the host is not public.");
+        }
 
         try {
             $response = Http::withBody($body, 'application/json')
                 ->withHeaders($this->headers($body))
                 ->timeout(10)
+                // A redirect is a second destination nobody checked.
+                ->withoutRedirecting()
+                ->withOptions(['curl' => [CURLOPT_RESOLVE => [$publicAddress->pin($this->endpoint->url, $addresses[0])]]])
                 ->post($this->endpoint->url);
         } catch (Throwable $exception) {
             $this->endpoint->recordFailure(null, $exception->getMessage(), $this->lastAttempt());
@@ -59,7 +73,7 @@ class DeliverWebhook implements ShouldQueue
             throw $exception;
         }
 
-        if ($response->failed()) {
+        if ($response->failed() || $response->redirect()) {
             $this->endpoint->recordFailure(
                 $response->status(),
                 'The endpoint answered '.$response->status().'.',

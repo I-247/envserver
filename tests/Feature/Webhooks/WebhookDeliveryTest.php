@@ -8,6 +8,8 @@ use App\Enums\WebhookKind;
 use App\Jobs\DeliverWebhook;
 use App\Models\Team;
 use App\Models\WebhookEndpoint;
+use App\Support\PublicAddress;
+use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 
@@ -17,6 +19,7 @@ beforeEach(function () {
     // — it is the cheapest possible "does this URL work" — but it means no
     // test here may leave a real request to make.
     Http::fake(['*' => Http::response('', 200)]);
+    fakeDns();
 
     $this->team = Team::factory()->create(['slug' => 'acme']);
 });
@@ -88,7 +91,7 @@ it('signs a json delivery over the exact body it sends', function () {
         'action' => AuditAction::ReleasePublished->value,
         'label' => 'Release published',
         'metadata' => [],
-    ]])->handle();
+    ]])->handle(app(PublicAddress::class));
 
     Http::assertSent(function ($request) use ($endpoint) {
         $signature = $request->header('X-Envserver-Signature')[0] ?? '';
@@ -107,7 +110,7 @@ it('sends slack a single text field and no signature', function () {
         'label' => 'Release published',
         'actor' => 'Sebastiaan',
         'metadata' => ['project' => 'webshop', 'environment' => 'production'],
-    ]])->handle();
+    ]])->handle(app(PublicAddress::class));
 
     Http::assertSent(function ($request) {
         $body = json_decode($request->body(), true);
@@ -128,7 +131,7 @@ it('records a delivery that arrived', function () {
         'last_error' => 'The endpoint answered 500.',
     ])->save();
 
-    app(DeliverWebhook::class, ['endpoint' => $endpoint, 'payload' => ['id' => 1, 'action' => 'x', 'metadata' => []]])->handle();
+    app(DeliverWebhook::class, ['endpoint' => $endpoint, 'payload' => ['id' => 1, 'action' => 'x', 'metadata' => []]])->handle(app(PublicAddress::class));
 
     $endpoint->refresh();
 
@@ -178,4 +181,53 @@ it('keeps the signing secret out of the settings page', function () {
     expect($response->getContent())
         ->not->toContain($endpoint->signing_secret)
         ->and($response->getContent())->not->toContain('abcdefghijklmnop');
+});
+
+function deliver(WebhookEndpoint $endpoint): void
+{
+    app(DeliverWebhook::class, ['endpoint' => $endpoint, 'payload' => ['id' => 1, 'action' => 'x', 'metadata' => []]])
+        ->handle(app(PublicAddress::class));
+}
+
+it('refuses to send when the name was repointed inside after it was saved', function () {
+    $endpoint = endpoint();
+
+    fakeDns(['hooks.example.com' => ['169.254.169.254']]);
+
+    expect(fn () => deliver($endpoint))->toThrow(RuntimeException::class);
+
+    // Only the endpoint-created event that went out while the name was public.
+    Http::assertSentCount(1);
+
+    expect($endpoint->refresh()->last_error)->toBe('The address no longer resolves to a public server.');
+});
+
+it('pins the connection to the address it checked', function () {
+    $endpoint = endpoint();
+
+    $options = null;
+    Http::fake(function ($request, array $requestOptions) use (&$options) {
+        $options = $requestOptions;
+
+        return Http::response('', 200);
+    });
+
+    deliver($endpoint);
+
+    expect($options['curl'][CURLOPT_RESOLVE] ?? null)->toBe(['hooks.example.com:443:93.184.215.14'])
+        ->and($options['allow_redirects'] ?? null)->toBeFalse();
+});
+
+it('does not count a redirect as a delivery', function () {
+    $endpoint = endpoint();
+
+    // A fresh factory: the catch-all 200 from beforeEach would answer first.
+    Http::swap(new Factory(app('events')));
+    Http::fake(['*' => Http::response('', 302, ['Location' => 'http://169.254.169.254/latest/meta-data'])]);
+
+    expect(fn () => deliver($endpoint))->toThrow(RuntimeException::class);
+
+    Http::assertSentCount(1);
+
+    expect($endpoint->refresh()->last_status)->toBe(302);
 });
