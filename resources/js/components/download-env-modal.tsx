@@ -13,6 +13,7 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { csrfToken } from '@/lib/csrf';
 import environments from '@/routes/environments';
 
 type Props = {
@@ -20,20 +21,6 @@ type Props = {
     environmentName: string;
     variableCount: number;
 };
-
-/**
- * Reads the CSRF token Laravel put in a cookie.
- *
- * The download is a plain fetch rather than an Inertia visit, because the
- * answer is a file and not a page, so it has to carry the token itself.
- */
-function csrfToken(): string {
-    const cookie = document.cookie
-        .split('; ')
-        .find((entry) => entry.startsWith('XSRF-TOKEN='));
-
-    return cookie ? decodeURIComponent(cookie.split('=')[1]) : '';
-}
 
 /**
  * Pull the server's filename out of the response, falling back to a sane one.

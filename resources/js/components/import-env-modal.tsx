@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { csrfToken } from '@/lib/csrf';
 import environments from '@/routes/environments';
 
 type Props = {
@@ -29,20 +30,6 @@ type Preview = {
 };
 
 type Strategy = 'overwrite' | 'keep';
-
-/**
- * Reads the CSRF token Laravel put in a cookie.
- *
- * The preview is a plain JSON call rather than an Inertia visit, so it has to
- * carry the token itself.
- */
-function csrfToken(): string {
-    const cookie = document.cookie
-        .split('; ')
-        .find((entry) => entry.startsWith('XSRF-TOKEN='));
-
-    return cookie ? decodeURIComponent(cookie.split('=')[1]) : '';
-}
 
 /**
  * Pastes a .env file into an environment.
