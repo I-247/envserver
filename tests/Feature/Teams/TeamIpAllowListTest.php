@@ -10,7 +10,7 @@ beforeEach(function () {
 });
 
 it('stores nothing while the field is left empty', function () {
-    $this->put(route('teams.ip-allowlist.update', $this->team->slug), ['ip_allowlist' => ''])
+    $this->put(route('teams.ip-allowlist.update', $this->team->slug), ['ip_allowlist' => '', 'password' => 'password'])
         ->assertRedirect(route('teams.edit', $this->team->slug));
 
     expect($this->team->fresh()->ip_allowlist)->toBeNull();
@@ -20,6 +20,7 @@ it('saves a list that includes the current address', function () {
     $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.9'])
         ->put(route('teams.ip-allowlist.update', $this->team->slug), [
             'ip_allowlist' => "203.0.113.0/24\n198.51.100.7",
+            'password' => 'password',
         ])
         ->assertSessionHasNoErrors();
 
@@ -28,20 +29,20 @@ it('saves a list that includes the current address', function () {
 
 it('refuses a list the current address is not on', function () {
     $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.7'])
-        ->put(route('teams.ip-allowlist.update', $this->team->slug), ['ip_allowlist' => '203.0.113.0/24'])
+        ->put(route('teams.ip-allowlist.update', $this->team->slug), ['ip_allowlist' => '203.0.113.0/24', 'password' => 'password'])
         ->assertSessionHasErrors('ip_allowlist');
 
     expect($this->team->fresh()->ip_allowlist)->toBeNull();
 });
 
 it('refuses an entry that is not an address or range', function () {
-    $this->put(route('teams.ip-allowlist.update', $this->team->slug), ['ip_allowlist' => 'nope'])
+    $this->put(route('teams.ip-allowlist.update', $this->team->slug), ['ip_allowlist' => 'nope', 'password' => 'password'])
         ->assertSessionHasErrors('ip_allowlist');
 });
 
 it('records the change in the audit trail', function () {
     $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.9'])
-        ->put(route('teams.ip-allowlist.update', $this->team->slug), ['ip_allowlist' => '203.0.113.0/24']);
+        ->put(route('teams.ip-allowlist.update', $this->team->slug), ['ip_allowlist' => '203.0.113.0/24', 'password' => 'password']);
 
     $event = AuditEvent::where('action', AuditAction::TeamIpAllowListUpdated)->sole();
 
@@ -70,7 +71,7 @@ it('keeps the team settings page reachable so a member can unlock themselves', f
         ->assertOk();
 
     $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.7'])
-        ->put(route('teams.ip-allowlist.update', $this->team->slug), ['ip_allowlist' => ''])
+        ->put(route('teams.ip-allowlist.update', $this->team->slug), ['ip_allowlist' => '', 'password' => 'password'])
         ->assertSessionHasNoErrors();
 
     expect($this->team->fresh()->ip_allowlist)->toBeNull();
@@ -81,6 +82,16 @@ it('does not let a member without the update permission change the list', functi
 
     $this->actingAs($member)
         ->withServerVariables(['REMOTE_ADDR' => '203.0.113.9'])
-        ->put(route('teams.ip-allowlist.update', $this->team->slug), ['ip_allowlist' => '203.0.113.9'])
+        ->put(route('teams.ip-allowlist.update', $this->team->slug), ['ip_allowlist' => '203.0.113.9', 'password' => 'password'])
         ->assertForbidden();
+});
+
+it('asks for the password before the list changes', function () {
+    $this->team->update(['ip_allowlist' => ['203.0.113.0/24']]);
+
+    $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.9'])
+        ->put(route('teams.ip-allowlist.update', $this->team->slug), ['ip_allowlist' => '', 'password' => 'wrong'])
+        ->assertSessionHasErrors('password');
+
+    expect($this->team->fresh()->ip_allowlist)->toBe(['203.0.113.0/24']);
 });

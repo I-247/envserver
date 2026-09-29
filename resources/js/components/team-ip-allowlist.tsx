@@ -1,6 +1,7 @@
 import { Form } from '@inertiajs/react';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
+import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -52,6 +53,27 @@ export default function TeamIpAllowList({ team }: Props) {
                                 covered here — restrict those per environment.
                             </p>
                             <InputError message={errors.ip_allowlist} />
+                        </div>
+
+                        <div className="grid max-w-sm gap-2">
+                            <Label htmlFor="team-ip-allowlist-password">
+                                Password
+                            </Label>
+
+                            <PasswordInput
+                                id="team-ip-allowlist-password"
+                                name="password"
+                                placeholder="Your password"
+                                autoComplete="current-password"
+                                data-test="team-ip-allowlist-password"
+                            />
+
+                            <p className="text-sm text-muted-foreground">
+                                Asked on every change: clearing this list opens
+                                the team to every network again.
+                            </p>
+
+                            <InputError message={errors.password} />
                         </div>
 
                         <div className="flex items-center gap-4">

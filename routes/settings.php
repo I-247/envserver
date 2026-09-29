@@ -50,7 +50,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('settings/teams/{team}/switch', [TeamController::class, 'switch'])->name('teams.switch');
         Route::delete('settings/teams/{team}/leave', [TeamController::class, 'leave'])->name('teams.leave');
 
-        Route::put('settings/teams/{team}/ip-allowlist', TeamIpAllowListController::class)->name('teams.ip-allowlist.update');
+        Route::put('settings/teams/{team}/ip-allowlist', TeamIpAllowListController::class)
+            ->middleware('throttle:6,1')
+            ->name('teams.ip-allowlist.update');
         Route::put('settings/teams/{team}/two-factor', TeamTwoFactorRequirementController::class)
             ->middleware('throttle:6,1')
             ->name('teams.two-factor.update');

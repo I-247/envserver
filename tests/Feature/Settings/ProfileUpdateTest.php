@@ -30,6 +30,7 @@ class ProfileUpdateTest extends TestCase
             ->patch(route('profile.update'), [
                 'name' => 'Test User',
                 'email' => 'test@example.com',
+                'current_password' => 'password',
             ]);
 
         $response
@@ -95,5 +96,44 @@ class ProfileUpdateTest extends TestCase
             ->assertRedirect(route('profile.edit'));
 
         $this->assertNotNull($user->fresh());
+    }
+
+    public function test_changing_the_email_address_requires_the_current_password()
+    {
+        $user = User::factory()->create(['email' => 'owner@example.com']);
+
+        $this
+            ->actingAs($user)
+            ->patch(route('profile.update'), [
+                'name' => $user->name,
+                'email' => 'attacker@example.com',
+            ])
+            ->assertSessionHasErrors('current_password');
+
+        $this
+            ->actingAs($user)
+            ->patch(route('profile.update'), [
+                'name' => $user->name,
+                'email' => 'attacker@example.com',
+                'current_password' => 'wrong-password',
+            ])
+            ->assertSessionHasErrors('current_password');
+
+        $this->assertSame('owner@example.com', $user->refresh()->email);
+    }
+
+    public function test_renaming_without_changing_the_email_needs_no_password()
+    {
+        $user = User::factory()->create();
+
+        $this
+            ->actingAs($user)
+            ->patch(route('profile.update'), [
+                'name' => 'New Name',
+                'email' => $user->email,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('New Name', $user->refresh()->name);
     }
 }
