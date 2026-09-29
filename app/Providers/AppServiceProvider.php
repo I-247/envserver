@@ -7,8 +7,12 @@ use App\Contracts\SecretCipher;
 use App\Cryptography\AesGcmSecretCipher;
 use App\Enums\ApiScope;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterval;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
@@ -37,6 +41,19 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configurePassport();
+        $this->configureRateLimiting();
+    }
+
+    /**
+     * Limit how fast one caller can use the API.
+     *
+     * Keyed on the user for a personal token and on the address otherwise,
+     * which is what a deploy token presents before it is resolved.
+     */
+    protected function configureRateLimiting(): void
+    {
+        RateLimiter::for('api', fn (Request $request) => Limit::perMinute(config('envserver.api_requests_per_minute'))
+            ->by($request->user()?->getAuthIdentifier() ?? $request->ip()));
     }
 
     /**
@@ -48,6 +65,12 @@ class AppServiceProvider extends ServiceProvider
     protected function configurePassport(): void
     {
         Passport::tokensCan(ApiScope::map());
+
+        $lifetime = CarbonInterval::days(config('envserver.api_token_days'));
+
+        Passport::tokensExpireIn($lifetime);
+        Passport::refreshTokensExpireIn($lifetime);
+        Passport::personalAccessTokensExpireIn($lifetime);
 
         Passport::deviceUserCodeView(
             fn (array $parameters) => Inertia::render('auth/device/user-code', [

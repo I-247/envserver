@@ -5,12 +5,15 @@ use App\Http\Controllers\Api\V1\CliDiscoveryController;
 use App\Http\Controllers\Api\V1\DeployController;
 use App\Http\Controllers\Api\V1\EnvironmentController;
 use App\Http\Controllers\Api\V1\ProjectController;
+use App\Http\Middleware\EnsureIpIsAllowed;
+use App\Http\Middleware\EnsureTeamIpIsAllowed;
 use App\Http\Middleware\EnsureTeamMembership;
+use App\Http\Middleware\EnsureTeamTwoFactorRequirementIsMet;
 use App\Http\Middleware\ResolveDeployToken;
 use Illuminate\Support\Facades\Route;
 use Laravel\Passport\Http\Middleware\CheckToken;
 
-Route::prefix('v1')->name('api.v1.')->group(function () {
+Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function () {
     Route::get('cli', CliDiscoveryController::class)->name('cli');
 
     /*
@@ -42,13 +45,19 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
      * flow. These do name the environment, because a personal token spans
      * every team the developer belongs to.
      */
-    Route::middleware('auth:api')->group(function () {
+    /*
+     * The operator's list applies here as it does to signing in: a personal
+     * token is a developer, not a deploy server. The team's own list and its
+     * second-factor requirement follow on the team routes, so a token cannot
+     * reach what the same person could not open in the portal.
+     */
+    Route::middleware([EnsureIpIsAllowed::class, 'auth:api'])->group(function () {
         Route::get('projects', [ProjectController::class, 'index'])
             ->middleware(CheckToken::using(ApiScope::ProjectsRead->value))
             ->name('projects.index');
 
         Route::prefix('teams/{team}/projects/{project}/environments/{environment}')
-            ->middleware(EnsureTeamMembership::class)
+            ->middleware([EnsureTeamMembership::class, EnsureTeamIpIsAllowed::class, EnsureTeamTwoFactorRequirementIsMet::class])
             ->scopeBindings()
             ->name('environments.')
             ->group(function () {

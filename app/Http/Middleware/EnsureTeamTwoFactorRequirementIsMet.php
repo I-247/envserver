@@ -41,7 +41,14 @@ class EnsureTeamTwoFactorRequirementIsMet
             'path' => $request->path(),
         ]);
 
-        Inertia::flash('toast', ['type' => 'error', 'message' => __('The team ":name" requires two-factor authentication. Set up an authenticator app or a passkey to continue.', ['name' => $team->name])]);
+        $message = __('The team ":name" requires two-factor authentication. Set up an authenticator app or a passkey to continue.', ['name' => $team->name]);
+
+        // An API client has no page to be sent to; it gets the reason instead.
+        if ($request->is('api/*') || $request->expectsJson()) {
+            abort(403, $message);
+        }
+
+        Inertia::flash('toast', ['type' => 'error', 'message' => $message]);
 
         return to_route('security.edit');
     }

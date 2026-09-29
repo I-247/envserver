@@ -119,4 +119,20 @@ return [
 
     'registration_enabled' => (bool) env('ENVSERVER_REGISTRATION_ENABLED', true),
 
+    /*
+    |--------------------------------------------------------------------------
+    | API Tokens
+    |--------------------------------------------------------------------------
+    |
+    | How long a token from `envclient login` stays valid before the developer
+    | has to log in again, and how many API requests one caller may make per
+    | minute. Passport's own default is a year, which is a long time for a
+    | stolen laptop to keep pulling every secret a developer can see.
+    |
+    */
+
+    'api_token_days' => (int) env('ENVSERVER_API_TOKEN_DAYS', 30),
+
+    'api_requests_per_minute' => (int) env('ENVSERVER_API_REQUESTS_PER_MINUTE', 120),
+
 ];

@@ -16,7 +16,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Models/{Variable,VariableVersion,Release,ReleaseItem,VariableAssignment}.php, app/Models/Variable.php | .ai/rules/models.md |
 | app/Actions/Projects/** | .ai/rules/projects.md |
 | app/Actions/Releases/** | .ai/rules/releases.md |
-| routes/settings.php | .ai/rules/routes.md |
+| routes/settings.php, routes/api.php | .ai/rules/routes.md |
 | app/Support/EnvFileRenderer.php, app/Support/EnvFile*.php, app/Support/IpAllowList.php | .ai/rules/support.md |
 | app/Jobs/DeliverWebhook.php, app/Http/Requests/Teams/SaveWebhookEndpointRequest.php, app/Support/PublicAddress.php | .ai/rules/teams-support.md |
 | app/Http/Requests/Teams/**, app/Rules/ValidTeamInvitation.php, app/Http/Controllers/Teams/** | .ai/rules/teams.md |

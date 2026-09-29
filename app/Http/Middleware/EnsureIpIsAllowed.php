@@ -11,6 +11,11 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Keeps the web application, signing in included, on the operator's allow list.
  *
+ * Personal API tokens are held to it too (routes/api.php): a token from
+ * `envclient login` is the same developer, so it may not reach from a network
+ * the portal would refuse. Deploy tokens are not; they carry the allow list
+ * of their environment instead.
+ *
  * The list lives in configuration rather than in the database on purpose: it
  * is the net under everything else, so somebody who has taken over an account
  * must not be able to widen it from the interface.

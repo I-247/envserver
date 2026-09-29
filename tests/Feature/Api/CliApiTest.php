@@ -286,3 +286,42 @@ describe('publishing', function () {
         $this->postJson(apiPath('/releases'))->assertForbidden();
     });
 });
+
+it('keeps a personal token on the operator allow list', function () {
+    config(['envserver.ip_allowlist' => ['203.0.113.0/24']]);
+    actingViaCli();
+
+    $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.7'])->getJson('/api/v1/projects')->assertForbidden();
+    $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.9'])->getJson('/api/v1/projects')->assertOk();
+});
+
+it('keeps a personal token on the team allow list', function () {
+    $this->team->forceFill(['ip_allowlist' => ['203.0.113.0/24']])->save();
+    actingViaCli();
+
+    $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.7'])
+        ->getJson(apiPath('/releases'))
+        ->assertForbidden();
+});
+
+it('refuses a personal token from a member without the second factor the team requires', function () {
+    $this->team->forceFill(['two_factor_required' => true])->save();
+    actingViaCli();
+
+    $this->getJson(apiPath('/releases'))
+        ->assertForbidden()
+        ->assertJsonPath('message', 'The team "'.$this->team->name.'" requires two-factor authentication. Set up an authenticator app or a passkey to continue.');
+});
+
+it('rate limits the api', function () {
+    config(['envserver.api_requests_per_minute' => 2]);
+    actingViaCli();
+
+    $this->getJson('/api/v1/projects')->assertOk();
+    $this->getJson('/api/v1/projects')->assertOk();
+    $this->getJson('/api/v1/projects')->assertTooManyRequests();
+});
+
+it('issues tokens that expire within the configured window', function () {
+    expect(Passport::tokensExpireIn()->totalDays)->toEqual(config('envserver.api_token_days'));
+});
