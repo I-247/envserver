@@ -33,7 +33,9 @@ class EnvironmentController extends Controller
      */
     public function release(Request $request, Team $team, Project $project, Environment $environment): ReleaseResource
     {
-        Gate::authorize('view', $project);
+        // A release carries every value in plaintext, so this is the same
+        // gate as a reveal in the portal, not the one for seeing the project.
+        Gate::authorize('viewSecrets', $project);
 
         return new ReleaseResource($this->resolveRelease($request, $environment));
     }
@@ -43,7 +45,7 @@ class EnvironmentController extends Controller
      */
     public function env(Request $request, Team $team, Project $project, Environment $environment): Response
     {
-        Gate::authorize('view', $project);
+        Gate::authorize('viewSecrets', $project);
 
         return response($this->resolveRelease($request, $environment)->toEnvFile(), 200, [
             'Content-Type' => 'text/plain; charset=utf-8',

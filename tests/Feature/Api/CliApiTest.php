@@ -78,6 +78,19 @@ it('serves the latest release of an environment', function () {
         ->assertJsonPath('data.variables.APP_ENV', 'production');
 });
 
+it('does not hand release values to a member who may not see secrets', function (string $suffix) {
+    cliVariable('APP_ENV', 'production');
+    app(PublishRelease::class)->handle($this->environment, $this->user);
+
+    $viewer = User::factory()->create();
+    $this->team->members()->attach($viewer, ['role' => TeamRole::Viewer->value]);
+    Passport::actingAs($viewer, ['env:read']);
+
+    $this->getJson(apiPath($suffix))
+        ->assertForbidden()
+        ->assertDontSee('production"', false);
+})->with(['release' => '/release', 'env file' => '/env']);
+
 it('serves the pending state so the CLI can diff before publishing', function () {
     cliVariable('APP_ENV', 'production');
 
