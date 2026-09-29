@@ -24,7 +24,9 @@ class CreateTeamInvitationRequest extends FormRequest
 
         return [
             'email' => ['required', 'string', 'email', 'max:255', new UniqueTeamInvitation($team)],
-            'role' => ['required', 'string', Rule::enum(TeamRole::class)],
+            // Owner is never on offer: an admin inviting a second address of
+            // their own as owner would outrank the person who made them admin.
+            'role' => ['required', 'string', Rule::in(array_column(TeamRole::assignable(), 'value'))],
         ];
     }
 }

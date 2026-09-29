@@ -2,6 +2,7 @@
 
 namespace App\Rules;
 
+use App\Enums\TeamRole;
 use App\Models\TeamInvitation;
 use App\Models\User;
 use Closure;
@@ -40,8 +41,23 @@ class ValidTeamInvitation implements ValidationRule
             return;
         }
 
+        if ($value->role === TeamRole::Owner) {
+            $fail(__('This invitation grants a role that can no longer be handed out by invitation.'));
+
+            return;
+        }
+
         if (strtolower($value->email) !== strtolower($this->user->email)) {
             $fail(__('This invitation was sent to a different email address.'));
+
+            return;
+        }
+
+        // A matching address only proves who was invited once the user has
+        // shown they can read that mailbox; otherwise anyone who registers
+        // the address first walks into the team.
+        if (! $this->user->hasVerifiedEmail()) {
+            $fail(__('Verify your email address before responding to this invitation.'));
         }
     }
 }

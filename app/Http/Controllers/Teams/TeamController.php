@@ -81,7 +81,9 @@ class TeamController extends Controller
                 ->whereNull('accepted_at')
                 ->get()
                 ->map(fn ($invitation) => [
-                    'code' => $invitation->code,
+                    // Never the code: it is the bearer credential in the
+                    // invitee's mail link, and every member can open this page.
+                    'id' => $invitation->id,
                     'email' => $invitation->email,
                     'role' => $invitation->role->value,
                     'role_label' => $invitation->role->label(),
