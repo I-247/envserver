@@ -21,6 +21,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
 
+Route::inertia('built-by', 'built-by')->name('built-by');
+
 Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class, EnsureTeamIpIsAllowed::class, EnsureTeamTwoFactorRequirementIsMet::class])
     ->scopeBindings()

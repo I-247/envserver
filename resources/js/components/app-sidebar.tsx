@@ -1,5 +1,5 @@
-import { usePage } from '@inertiajs/react';
-import { Boxes, LayoutGrid, ScrollText } from 'lucide-react';
+import { Link, usePage } from '@inertiajs/react';
+import { Boxes, Hammer, LayoutGrid, ScrollText } from 'lucide-react';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { TeamSwitcher } from '@/components/team-switcher';
@@ -9,9 +9,10 @@ import {
     SidebarFooter,
     SidebarHeader,
     SidebarMenu,
+    SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { audit, dashboard } from '@/routes';
+import { audit, builtBy, dashboard } from '@/routes';
 import { index as projectsIndex } from '@/routes/projects';
 import type { NavItem } from '@/types';
 
@@ -63,6 +64,21 @@ export function AppSidebar() {
             </SidebarContent>
 
             <SidebarFooter>
+                <SidebarMenu>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton
+                            asChild
+                            size="sm"
+                            tooltip="Built by Codecycler"
+                            className="text-muted-foreground"
+                        >
+                            <Link href={builtBy()}>
+                                <Hammer />
+                                <span>Built by Codecycler</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                </SidebarMenu>
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

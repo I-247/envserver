@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react';
 import AppLogoIconColor from '@/components/app-logo-icon-color';
-import { home } from '@/routes';
+import { builtBy, home } from '@/routes';
 import type { AuthLayoutProps } from '@/types';
 
 export default function AuthSimpleLayout({
@@ -33,6 +33,13 @@ export default function AuthSimpleLayout({
                     {children}
                 </div>
             </div>
+
+            <Link
+                href={builtBy()}
+                className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+                Built by Codecycler
+            </Link>
         </div>
     );
 }
