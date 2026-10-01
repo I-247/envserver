@@ -2,6 +2,11 @@
 
 Syncs environment variables between an Envserver server and a working directory.
 
+The same documentation is in the portal at `/docs/cli` on your Envserver
+server, with your server's URL already filled in. Set
+`ENVSERVER_PUBLIC_CLI_DOCS=false` on the server to show that page to signed in
+users only.
+
 ## Install
 
 On a server, download the latest binary straight from the [releases
@@ -217,6 +222,129 @@ cosign verify-blob \
   checksums.txt
 sha256sum --check --ignore-missing checksums.txt
 ```
+
+## Commands
+
+Every command also takes `--no-color` and `--help`.
+
+| Command | What it does | Flags |
+| --- | --- | --- |
+| `init` | Link this directory to an environment by writing `envclient.json` | `--server`, `--team`, `--project`, `--environment` (default `development`) |
+| `login` | Log in from the terminal; approve the code in the browser | `--server` (default: the one in `envclient.json`) |
+| `logout` | Remove the stored token for a server | `--server` |
+| `whoami` | Show which server you are logged in to and what you can reach | |
+| `list` | List the projects and environments you can reach | |
+| `pull` | Write the published variables into your .env, after asking | `--constructive`, `--prune`, `--dry-run`, `--force`, `-o/--out`, `--release` |
+| `push` | Send the values in your .env to the server | `-m/--message`, `--publish` (personal login only), `-f/--file` |
+| `diff` | Compare your .env with the latest release | `-f/--file` |
+| `check` | Like `diff`, but exits 2 when your file is missing something | `-f/--file`, `--strict` |
+| `history` | Show the release history of this environment | |
+| `run -- <command>` | Run a command with the variables injected, writing no file | `--vault`, `--remote`, `-f/--file`, `--release` |
+| `seal` | Store the release locally, encrypted, as `.env.envclient` | `-f/--file`, `--release` |
+| `unseal` | Decrypt the local vault and show what is in it | `-f/--file`, `-o/--out` |
+| `update` | Update envclient to the latest signed release | `--check`, `--force` |
+
+`envclient.json`, written by `init` and safe to commit:
+
+```json
+{
+    "server": "https://envserver.example.com",
+    "team": "acme",
+    "project": "webshop",
+    "environment": "development"
+}
+```
+
+`envclient login` keeps its token in `credentials.json` in your user config
+directory (`~/.config/envclient` on Linux, `~/Library/Application
+Support/envclient` on macOS), or in `ENVCLIENT_CONFIG_DIR` when set.
+
+## Environment variables
+
+| Variable | Meaning |
+| --- | --- |
+| `ENVCLIENT_SERVER` | The server a deploy token belongs to. Required next to a deploy token; the secret is never sent anywhere else. |
+| `ENVCLIENT_CLIENT_ID` | The deploy token's client ID. Takes priority over a stored personal login. |
+| `ENVCLIENT_CLIENT_SECRET` | The deploy token's secret. Also the key a sealed file is locked with. |
+| `ENVCLIENT_SCOPES` | The scopes asked for with a deploy token (default `env:read env:write`). The token itself decides what it may do, so leave this alone. |
+| `ENVCLIENT_VAULT_KEY` | Your own key for `seal` and `run`, for a machine without a deploy token. At least 16 bytes. |
+| `ENVCLIENT_CONFIG_DIR` | Where `credentials.json` is kept. |
+| `NO_COLOR` | Turns colour off, like `--no-color`. |
+| `CLICOLOR_FORCE` | Turns colour on when the output is piped. |
+
+`ENVCLIENT_SERVER`, `ENVCLIENT_CLIENT_ID`, `ENVCLIENT_CLIENT_SECRET` and
+`ENVCLIENT_SCOPES` can also come from `.envclientrc` or `.env` in the current
+directory. The others must be exported. For the installer, `INSTALL_DIR` sets
+where the binary goes and `ENVCLIENT_REQUIRE_SIGNATURE=1` refuses an install
+that cannot be verified.
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | The command succeeded. |
+| `1` | The command could not run: no network, no token, no release, or another error. |
+| `2` | `envclient check` only: your file does not match the release. |
+
+## Troubleshooting
+
+### `this pull needs confirmation and there is no terminal to ask at`
+
+The pull ran without a terminal, as on a deploy server or in CI. Add
+`--force` to apply it, or `--dry-run` to only look.
+
+### A deploy does not show up in the portal
+
+Only a pull with a deploy token counts as a deploy. A pull with
+`envclient login` does not. Check that `ENVCLIENT_CLIENT_ID` and
+`ENVCLIENT_CLIENT_SECRET` are set on the server. The deploy tokens page shows
+when each token was last used.
+
+### `This deploy token may not be used from this address.`
+
+The server's IP address is not on an allow list. Both the environment's list
+and the token's own list must allow it. Change the token's list on the deploy
+tokens page, or the environment's list under the environment's settings.
+Every refusal is in the audit trail.
+
+### 403 when pushing with a deploy token
+
+Deploy tokens are read only unless "also allow this token to push variables"
+was ticked when it was created. Create a new token with push access, or push
+with a personal login.
+
+### `--publish needs a personal login`
+
+A deploy token can push but never publish a release. Push without
+`--publish` and publish from the portal, or run `envclient login`.
+
+### `Invalid scope(s) provided.`
+
+`ENVCLIENT_SCOPES` asks for less than the command needs. Unset it so the
+default applies.
+
+### `a deploy token needs ENVCLIENT_SERVER set next to it`
+
+Set `ENVCLIENT_SERVER` in the same place as the client ID and secret. With a
+deploy token the server always comes from there, and envclient refuses when
+`envclient.json` names a different one.
+
+### Not logged in, or your session expired
+
+Run `envclient login`. A login lasts a limited number of days, set by the
+server.
+
+### `no envclient.json found`
+
+Run the command inside a linked project, or run `envclient init` first.
+Deploy tokens do not need this file.
+
+### `this vault was sealed with a different key`
+
+The deploy token was rotated, or `ENVCLIENT_VAULT_KEY` changed. Run
+`envclient seal` again with the current key.
+
+## Development
 
 ```shell
 go test ./...

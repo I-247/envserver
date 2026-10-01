@@ -209,7 +209,8 @@ keys, and the OAuth client the CLI logs in with.
 
 ## The CLI
 
-See [`cli/README.md`](cli/README.md). In short:
+See [`cli/README.md`](cli/README.md), or `/docs/cli` on a running server
+(public unless `ENVSERVER_PUBLIC_CLI_DOCS=false`). In short:
 
 ```shell
 envclient login
