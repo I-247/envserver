@@ -1,6 +1,10 @@
 export type ProjectEnvironmentSummary = {
     name: string;
     slug: string;
+    /** Newest pull by one of the environment's deploy tokens. */
+    lastDeployedAt: string | null;
+    /** Whether a deploy token that is not revoked or expired exists. */
+    hasDeployToken: boolean;
 };
 
 export type ProjectSummary = {

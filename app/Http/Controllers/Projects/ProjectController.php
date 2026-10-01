@@ -27,7 +27,13 @@ class ProjectController extends Controller
 
         return Inertia::render('projects/index', [
             'projects' => $currentTeam->projects()
-                ->with('environments')
+                ->with(['environments' => fn ($query) => $query
+                    ->withMax('deployTokens', 'last_used_at')
+                    ->withCount(['deployTokens as usable_deploy_tokens_count' => fn ($query) => $query
+                        ->whereNull('revoked_at')
+                        ->where(fn ($query) => $query
+                            ->whereNull('expires_at')
+                            ->orWhere('expires_at', '>=', now()))])])
                 ->withMax('deployTokens', 'last_used_at')
                 ->withSum('deployTokens', 'use_count')
                 ->orderBy('name')
@@ -39,6 +45,14 @@ class ProjectController extends Controller
                     'environments' => $project->environments->map(fn (Environment $environment) => [
                         'name' => $environment->name,
                         'slug' => $environment->slug,
+                        // Only a deploy token's pull counts as a deploy. A
+                        // developer pulling with their own login does not, so
+                        // an environment without a usable token can never
+                        // show one, and the portal says why.
+                        'lastDeployedAt' => $environment->getAttribute('deploy_tokens_max_last_used_at')
+                            ? Carbon::parse($environment->getAttribute('deploy_tokens_max_last_used_at'))->toISOString()
+                            : null,
+                        'hasDeployToken' => $environment->getAttribute('usable_deploy_tokens_count') > 0,
                     ]),
                     // Read through getAttribute: withSum and withMax graft
                     // these on as query results, so they are not columns and

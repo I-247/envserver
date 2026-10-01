@@ -354,6 +354,50 @@ it('reports a project that was never deployed', function () {
         );
 });
 
+it('shows the last deploy of each environment', function () {
+    $team = Team::factory()->create();
+    actingAsTeamMember(TeamRole::Member, $team);
+
+    $project = Project::factory()->for($team)->create();
+    $staging = Environment::factory()->for($project)->create();
+    $production = Environment::factory()->for($project)->create();
+
+    $deployedAt = now()->subHour()->startOfSecond();
+
+    makeDeployToken($staging, null);
+    makeDeployToken($production, $deployedAt, 3);
+
+    $this->get(route('projects.index', ['current_team' => $team->slug]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('projects.0.environments.0.lastDeployedAt', null)
+            ->where('projects.0.environments.0.hasDeployToken', true)
+            ->where('projects.0.environments.1.lastDeployedAt', $deployedAt->toISOString())
+            ->where('projects.0.environments.1.hasDeployToken', true)
+        );
+});
+
+it('does not count revoked or expired tokens as an environment deploy token', function () {
+    $team = Team::factory()->create();
+    actingAsTeamMember(TeamRole::Member, $team);
+
+    $project = Project::factory()->for($team)->create();
+    $revoked = Environment::factory()->for($project)->create();
+    $expired = Environment::factory()->for($project)->create();
+    Environment::factory()->for($project)->create();
+
+    makeDeployToken($revoked, null)->revoke();
+    makeDeployToken($expired, null)->forceFill(['expires_at' => now()->subDay()])->save();
+
+    $this->get(route('projects.index', ['current_team' => $team->slug]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('projects.0.environments.0.hasDeployToken', false)
+            ->where('projects.0.environments.1.hasDeployToken', false)
+            ->where('projects.0.environments.2.hasDeployToken', false)
+        );
+});
+
 function makeDeployToken(Environment $environment, ?CarbonInterface $lastUsedAt, int $useCount = 0): DeployToken
 {
     return DeployToken::forceCreate([

@@ -6,9 +6,14 @@ import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import environments from '@/routes/environments';
 import { index, show } from '@/routes/projects';
-import type { ProjectSummary } from '@/types';
+import type { ProjectEnvironmentSummary, ProjectSummary } from '@/types';
 
 type Props = {
     projects: ProjectSummary[];
@@ -17,19 +22,24 @@ type Props = {
     };
 };
 
-/**
- * A deploy token's use is the moment a server actually pulled this project's
- * variables, which is as close as we get to a deploy.
- */
-function formatDeploys(count: number, lastDeployedAt: string | null): string {
-    if (!lastDeployedAt) {
-        return 'Never deployed';
-    }
-
-    const moment = new Date(lastDeployedAt).toLocaleString(undefined, {
+function formatMoment(timestamp: string): string {
+    return new Date(timestamp).toLocaleString(undefined, {
         dateStyle: 'medium',
         timeStyle: 'short',
     });
+}
+
+/**
+ * A deploy token's use is the moment a server actually pulled this project's
+ * variables, which is as close as we get to a deploy. A developer pulling
+ * with their own login is not a deploy, so the label names the token.
+ */
+function formatDeploys(count: number, lastDeployedAt: string | null): string {
+    if (!lastDeployedAt) {
+        return 'No deploy-token pulls yet';
+    }
+
+    const moment = formatMoment(lastDeployedAt);
 
     // Deploys from before the counter existed are not in the count, so a
     // project can have a deploy moment without a number to go with it.
@@ -38,6 +48,34 @@ function formatDeploys(count: number, lastDeployedAt: string | null): string {
     }
 
     return `${count} ${count === 1 ? 'deploy' : 'deploys'} · last ${moment}`;
+}
+
+/**
+ * Why an environment does or does not show a deploy, so an environment
+ * without a deploy token is not mistaken for a pull that went missing.
+ */
+function describeEnvironmentDeploy(environment: ProjectEnvironmentSummary): {
+    tone: string;
+    label: string;
+} {
+    if (environment.lastDeployedAt) {
+        return {
+            tone: 'bg-emerald-500',
+            label: `Last deploy-token pull ${formatMoment(environment.lastDeployedAt)}`,
+        };
+    }
+
+    if (environment.hasDeployToken) {
+        return {
+            tone: 'bg-amber-500',
+            label: 'Has a deploy token, but no server has pulled with it yet',
+        };
+    }
+
+    return {
+        tone: 'bg-muted-foreground/40',
+        label: 'No deploy token. Pulls with a personal login do not count as deploys',
+    };
 }
 
 export default function ProjectsIndex({ projects, permissions }: Props) {
@@ -161,30 +199,56 @@ export default function ProjectsIndex({ projects, permissions }: Props) {
                                         ) : (
                                             <div className="relative z-10 flex flex-wrap gap-1">
                                                 {project.environments.map(
-                                                    (environment) => (
-                                                        <Badge
-                                                            key={
-                                                                environment.slug
-                                                            }
-                                                            variant="secondary"
-                                                            asChild
-                                                            data-test="project-environment-badge"
-                                                        >
-                                                            <Link
-                                                                href={environments.show(
-                                                                    [
-                                                                        teamSlug,
-                                                                        project.slug,
-                                                                        environment.slug,
-                                                                    ],
-                                                                )}
-                                                            >
-                                                                {
-                                                                    environment.name
+                                                    (environment) => {
+                                                        const deploy =
+                                                            describeEnvironmentDeploy(
+                                                                environment,
+                                                            );
+
+                                                        return (
+                                                            <Tooltip
+                                                                key={
+                                                                    environment.slug
                                                                 }
-                                                            </Link>
-                                                        </Badge>
-                                                    ),
+                                                            >
+                                                                <TooltipTrigger
+                                                                    asChild
+                                                                >
+                                                                    <Badge
+                                                                        variant="secondary"
+                                                                        asChild
+                                                                        data-test="project-environment-badge"
+                                                                    >
+                                                                        <Link
+                                                                            href={environments.show(
+                                                                                [
+                                                                                    teamSlug,
+                                                                                    project.slug,
+                                                                                    environment.slug,
+                                                                                ],
+                                                                            )}
+                                                                        >
+                                                                            <span
+                                                                                aria-hidden
+                                                                                className={`size-1.5 rounded-full ${deploy.tone}`}
+                                                                            />
+                                                                            {
+                                                                                environment.name
+                                                                            }
+                                                                            <span className="sr-only">
+                                                                                {`: ${deploy.label}`}
+                                                                            </span>
+                                                                        </Link>
+                                                                    </Badge>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent>
+                                                                    {
+                                                                        deploy.label
+                                                                    }
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        );
+                                                    },
                                                 )}
                                             </div>
                                         )}
