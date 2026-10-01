@@ -17,12 +17,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { store } from '@/routes/teams';
 
-export default function CreateTeamModal({ children }: PropsWithChildren) {
-    const [open, setOpen] = useState(false);
+type Props = PropsWithChildren<{
+    /** Control the dialog from outside, for opening it without a trigger. */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+}>;
+
+export default function CreateTeamModal({
+    children,
+    open: controlledOpen,
+    onOpenChange,
+}: Props) {
+    const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+    const open = controlledOpen ?? uncontrolledOpen;
+    const setOpen = onOpenChange ?? setUncontrolledOpen;
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>{children}</DialogTrigger>
+            {children ? (
+                <DialogTrigger asChild>{children}</DialogTrigger>
+            ) : null}
             <DialogContent>
                 <Form
                     key={String(open)}

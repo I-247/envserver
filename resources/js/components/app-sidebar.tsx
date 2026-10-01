@@ -1,5 +1,6 @@
 import { Link, usePage } from '@inertiajs/react';
 import { BookOpen, Boxes, Hammer, LayoutGrid, ScrollText } from 'lucide-react';
+import { CommandPalette } from '@/components/command-palette';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { TeamSwitcher } from '@/components/team-switcher';
@@ -56,6 +57,9 @@ export function AppSidebar() {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <TeamSwitcher />
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                        <CommandPalette />
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarHeader>

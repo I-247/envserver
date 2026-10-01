@@ -14,6 +14,7 @@ use App\Http\Controllers\Environments\VariableController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\Projects\DriftController;
 use App\Http\Controllers\Projects\ProjectController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamIpIsAllowed;
 use App\Http\Middleware\EnsureTeamMembership;
@@ -33,6 +34,12 @@ Route::prefix('{current_team}')
         Route::get('dashboard', DashboardController::class)->name('dashboard');
 
         Route::get('audit', AuditController::class)->name('audit');
+
+        // Asked on every keystroke of the command palette, hence the wider
+        // limit; it only ever returns names and keys, never a value.
+        Route::get('search', SearchController::class)
+            ->middleware('throttle:120,1')
+            ->name('search');
 
         // Opens a few minutes in which single values reveal; see
         // SecretAccessWindow. Throttled like every other password field.
