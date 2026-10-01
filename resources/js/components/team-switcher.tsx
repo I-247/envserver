@@ -1,5 +1,5 @@
-import { router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, Plus } from 'lucide-react';
+import { Link, usePage } from '@inertiajs/react';
+import { Check, ChevronsUpDown, Plus, Settings } from 'lucide-react';
 import AppLogoIconColor from '@/components/app-logo-icon-color';
 import CreateTeamModal from '@/components/create-team-modal';
 import { Button } from '@/components/ui/button';
@@ -13,8 +13,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SidebarMenuButton } from '@/components/ui/sidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { switchMethod } from '@/routes/teams';
-import type { Team } from '@/types';
+import { useSwitchTeam } from '@/hooks/use-switch-team';
+import { edit as teamEdit } from '@/routes/teams';
 
 type TeamSwitcherProps = {
     inHeader?: boolean;
@@ -27,32 +27,7 @@ export function TeamSwitcher({ inHeader = false }: TeamSwitcherProps) {
     const teams = page.props.teams ?? [];
     const appName = page.props.name;
 
-    const switchTeam = (team: Team) => {
-        const previousTeamSlug = currentTeam?.slug;
-
-        router.visit(switchMethod(team.slug), {
-            onFinish: () => {
-                if (!previousTeamSlug || typeof window === 'undefined') {
-                    router.reload();
-
-                    return;
-                }
-
-                const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-                const segment = `/${previousTeamSlug}`;
-
-                if (currentUrl.includes(segment)) {
-                    router.visit(currentUrl.replace(segment, `/${team.slug}`), {
-                        replace: true,
-                    });
-
-                    return;
-                }
-
-                router.reload();
-            },
-        });
-    };
+    const switchTeam = useSwitchTeam();
 
     return (
         <DropdownMenu>
@@ -94,12 +69,13 @@ export function TeamSwitcher({ inHeader = false }: TeamSwitcherProps) {
             <DropdownMenuContent
                 className={
                     inHeader
-                        ? 'w-56'
-                        : 'w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg'
+                        ? 'w-72'
+                        : 'w-(--radix-dropdown-menu-trigger-width) min-w-72 rounded-lg'
                 }
                 side={inHeader ? undefined : isMobile ? 'bottom' : 'right'}
                 align={inHeader ? 'end' : 'start'}
                 sideOffset={inHeader ? undefined : 4}
+                collisionPadding={8}
             >
                 <DropdownMenuLabel className="text-xs text-muted-foreground">
                     Teams
@@ -128,6 +104,26 @@ export function TeamSwitcher({ inHeader = false }: TeamSwitcherProps) {
                     </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
+                {currentTeam ? (
+                    <DropdownMenuItem
+                        asChild
+                        data-test="team-switcher-settings"
+                        className={
+                            inHeader
+                                ? 'cursor-pointer gap-2'
+                                : 'cursor-pointer gap-2 p-2'
+                        }
+                    >
+                        <Link href={teamEdit(currentTeam.slug)}>
+                            <Settings
+                                className={inHeader ? 'size-4' : 'h-4 w-4'}
+                            />
+                            <span className="text-muted-foreground">
+                                {currentTeam.name} settings
+                            </span>
+                        </Link>
+                    </DropdownMenuItem>
+                ) : null}
                 <CreateTeamModal>
                     <DropdownMenuItem
                         data-test="team-switcher-new-team"
