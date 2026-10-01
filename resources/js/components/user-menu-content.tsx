@@ -1,21 +1,18 @@
 import { Link, router } from '@inertiajs/react';
+import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import type { LucideIcon } from 'lucide-react';
 import { LogOut, Monitor, Moon, Settings, Sun } from 'lucide-react';
 import {
     DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuLabel,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
     DropdownMenuSeparator,
-    DropdownMenuSub,
-    DropdownMenuSubContent,
-    DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
 import { UserInfo } from '@/components/user-info';
 import { useAppearance } from '@/hooks/use-appearance';
 import type { Appearance } from '@/hooks/use-appearance';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
+import { cn } from '@/lib/utils';
 import { logout } from '@/routes';
 import { edit } from '@/routes/profile';
 import type { User } from '@/types';
@@ -34,15 +31,52 @@ const appearanceOptions: {
     { value: 'system', icon: Monitor, label: 'System' },
 ];
 
-const appearanceRadioItemClassName =
-    'data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground data-[state=checked]:font-medium';
+/**
+ * The three appearance choices as one full-width segmented control.
+ *
+ * Each segment is a real menu radio item, so arrow keys still reach it and a
+ * screen reader still hears which one is checked. Selecting one keeps the
+ * menu open, so you see the theme change without reopening it.
+ */
+function AppearanceSwitch({
+    appearance,
+    onChange,
+}: {
+    appearance: Appearance;
+    onChange: (appearance: Appearance) => void;
+}) {
+    return (
+        <div className="px-1 py-1">
+            <DropdownMenuPrimitive.RadioGroup
+                value={appearance}
+                onValueChange={(value) => onChange(value as Appearance)}
+                aria-label="Appearance"
+                className="grid grid-cols-3 gap-0.5 rounded-md bg-muted p-0.5"
+                data-test="appearance-switch"
+            >
+                {appearanceOptions.map(({ value, icon: Icon, label }) => (
+                    <DropdownMenuPrimitive.RadioItem
+                        key={value}
+                        value={value}
+                        onSelect={(event) => event.preventDefault()}
+                        className={cn(
+                            'flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-[5px] text-xs text-muted-foreground outline-hidden transition-colors',
+                            'hover:text-foreground data-[highlighted]:text-foreground',
+                            'data-[state=checked]:bg-background data-[state=checked]:text-foreground data-[state=checked]:shadow-xs',
+                        )}
+                    >
+                        <Icon className="size-3.5" />
+                        {label}
+                    </DropdownMenuPrimitive.RadioItem>
+                ))}
+            </DropdownMenuPrimitive.RadioGroup>
+        </div>
+    );
+}
 
 export function UserMenuContent({ user }: Props) {
     const cleanup = useMobileNavigation();
     const { appearance, updateAppearance } = useAppearance();
-    const AppearanceIcon =
-        appearanceOptions.find((option) => option.value === appearance)?.icon ??
-        Sun;
 
     const handleLogout = () => {
         cleanup();
@@ -69,33 +103,10 @@ export function UserMenuContent({ user }: Props) {
                         Settings
                     </Link>
                 </DropdownMenuItem>
-                <DropdownMenuSub>
-                    <DropdownMenuSubTrigger>
-                        <AppearanceIcon className="mr-2" />
-                        Appearance
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent>
-                        <DropdownMenuRadioGroup
-                            value={appearance}
-                            onValueChange={(value) =>
-                                updateAppearance(value as Appearance)
-                            }
-                        >
-                            {appearanceOptions.map(
-                                ({ value, icon: Icon, label }) => (
-                                    <DropdownMenuRadioItem
-                                        key={value}
-                                        value={value}
-                                        className={appearanceRadioItemClassName}
-                                    >
-                                        <Icon className="mr-2" />
-                                        {label}
-                                    </DropdownMenuRadioItem>
-                                ),
-                            )}
-                        </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                </DropdownMenuSub>
+                <AppearanceSwitch
+                    appearance={appearance}
+                    onChange={updateAppearance}
+                />
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
