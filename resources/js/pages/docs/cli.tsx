@@ -1,7 +1,9 @@
 import { Head } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import Code from '@/components/code';
 import CopyButton from '@/components/copy-button';
+import { cn } from '@/lib/utils';
 
 type Props = {
     server: string;
@@ -424,7 +426,7 @@ function Section({
     children: ReactNode;
 }) {
     return (
-        <section id={id} className="scroll-mt-8 space-y-4">
+        <section id={id} className="scroll-mt-24 space-y-4">
             <h2 className="text-xl font-semibold">{title}</h2>
             {children}
         </section>
@@ -456,7 +458,68 @@ function DefinitionTable({ rows }: { rows: Flag[] }) {
     );
 }
 
+/**
+ * How far below the top of the viewport a section heading has to scroll
+ * before it counts as the one being read: just under the sticky header.
+ */
+const ACTIVE_SECTION_OFFSET = 120;
+
+/**
+ * Track which section is being read, for the table of contents.
+ *
+ * The active section is the last one whose top has passed just under the
+ * sticky header. At the very bottom of the page the last section wins, even
+ * when it is too short to ever reach that line.
+ */
+function useActiveSection(ids: string[]): string {
+    const [active, setActive] = useState(ids[0]);
+
+    useEffect(() => {
+        const update = () => {
+            const atBottom =
+                window.innerHeight + window.scrollY >=
+                document.documentElement.scrollHeight - 2;
+
+            if (atBottom) {
+                setActive(ids[ids.length - 1]);
+
+                return;
+            }
+
+            let current = ids[0];
+
+            for (const id of ids) {
+                const element = document.getElementById(id);
+
+                if (
+                    element &&
+                    element.getBoundingClientRect().top <= ACTIVE_SECTION_OFFSET
+                ) {
+                    current = id;
+                }
+            }
+
+            setActive(current);
+        };
+
+        update();
+        window.addEventListener('scroll', update, { passive: true });
+        window.addEventListener('resize', update);
+
+        return () => {
+            window.removeEventListener('scroll', update);
+            window.removeEventListener('resize', update);
+        };
+    }, [ids]);
+
+    return active;
+}
+
+const sectionIds = sections.map((section) => section.id);
+
 export default function CliDocumentation({ server }: Props) {
+    const activeSection = useActiveSection(sectionIds);
+
     return (
         <>
             <Head title="CLI documentation" />
@@ -479,14 +542,24 @@ export default function CliDocumentation({ server }: Props) {
                 <div className="grid gap-10 lg:grid-cols-[12rem_1fr]">
                     <nav
                         aria-label="On this page"
-                        className="lg:sticky lg:top-8 lg:self-start"
+                        className="lg:sticky lg:top-24 lg:self-start"
                     >
                         <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm lg:flex-col">
                             {sections.map((section) => (
                                 <li key={section.id}>
                                     <a
                                         href={`#${section.id}`}
-                                        className="text-muted-foreground transition-colors hover:text-foreground"
+                                        aria-current={
+                                            activeSection === section.id
+                                                ? 'location'
+                                                : undefined
+                                        }
+                                        className={cn(
+                                            'transition-colors hover:text-foreground',
+                                            activeSection === section.id
+                                                ? 'font-medium text-foreground'
+                                                : 'text-muted-foreground',
+                                        )}
                                     >
                                         {section.title}
                                     </a>

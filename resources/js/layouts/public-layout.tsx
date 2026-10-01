@@ -12,21 +12,23 @@ import { builtBy, home } from '@/routes';
 export default function PublicLayout({ children }: { children: ReactNode }) {
     return (
         <div className="flex min-h-svh flex-col bg-background">
-            <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-6 md:px-6">
-                <Link
-                    href={home()}
-                    className="flex items-center gap-2 text-sm font-medium"
-                >
-                    <AppLogoIconColor className="size-8" />
-                    <span>Envserver</span>
-                </Link>
-
-                <Button variant="ghost" size="sm" asChild>
-                    <Link href={home()}>
-                        <ArrowLeft />
-                        Back to the app
+            <header className="sticky top-0 z-20 border-b border-transparent bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+                <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-4 md:px-6">
+                    <Link
+                        href={home()}
+                        className="flex items-center gap-2 text-sm font-medium"
+                    >
+                        <AppLogoIconColor className="size-8" />
+                        <span>Envserver</span>
                     </Link>
-                </Button>
+
+                    <Button variant="ghost" size="sm" asChild>
+                        <Link href={home()}>
+                            <ArrowLeft />
+                            Back to the app
+                        </Link>
+                    </Button>
+                </div>
             </header>
 
             <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-12 md:px-6 md:py-16">
