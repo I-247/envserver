@@ -8,6 +8,7 @@ use App\Enums\AuditAction;
 use App\Models\DeployToken;
 use App\Models\Environment;
 use App\Models\User;
+use App\Support\IpAllowList;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Laravel\Passport\ClientRepository;
@@ -22,6 +23,9 @@ class CreateDeployToken
     /**
      * Issue a machine token that may read exactly one environment.
      *
+     * The allow list narrows where the token may be used from, on top of the
+     * environment's own list. Left out, the token adds no restriction.
+     *
      * @param  list<string>  $scopes
      */
     public function handle(
@@ -30,8 +34,11 @@ class CreateDeployToken
         ?User $creator = null,
         array $scopes = ['env:read'],
         ?Carbon $expiresAt = null,
+        ?IpAllowList $allowList = null,
     ): NewDeployToken {
-        return DB::transaction(function () use ($environment, $name, $creator, $scopes, $expiresAt) {
+        $allowList ??= IpAllowList::make([]);
+
+        return DB::transaction(function () use ($environment, $name, $creator, $scopes, $expiresAt, $allowList) {
             $client = $this->clients->createClientCredentialsGrantClient(
                 $this->clientName($environment, $name),
             );
@@ -41,6 +48,7 @@ class CreateDeployToken
                 'oauth_client_id' => $client->getKey(),
                 'name' => $name,
                 'scopes' => $scopes,
+                'ip_allowlist' => $allowList->toStorage(),
                 'created_by' => $creator?->id,
                 'expires_at' => $expiresAt,
             ]);
@@ -55,6 +63,7 @@ class CreateDeployToken
                     'project' => $environment->project->slug,
                     'environment' => $environment->slug,
                     'scopes' => $scopes,
+                    'ip_allowlist' => $allowList->toArray(),
                 ],
             );
 

@@ -25,6 +25,7 @@ enum AuditAction: string
     case ReleaseRolledBack = 'release.rolled-back';
 
     case DeployTokenCreated = 'deploy-token.created';
+    case DeployTokenUpdated = 'deploy-token.updated';
     case DeployTokenRevoked = 'deploy-token.revoked';
     case DeployTokenBlocked = 'deploy-token.blocked';
     case DeployTokenPushed = 'deploy-token.pushed';
@@ -58,6 +59,7 @@ enum AuditAction: string
             self::ReleasePublished => 'Release published',
             self::ReleaseRolledBack => 'Rolled back',
             self::DeployTokenCreated => 'Deploy token created',
+            self::DeployTokenUpdated => 'Deploy token IP allow list changed',
             self::DeployTokenRevoked => 'Deploy token revoked',
             self::DeployTokenBlocked => 'Deploy token blocked by IP allow list',
             self::DeployTokenPushed => 'Variables pushed by deploy token',

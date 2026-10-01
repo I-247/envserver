@@ -19,3 +19,6 @@ ENVSERVER_IP_ALLOWLIST staat in config en is bewust niet vanuit de interface te 
 De team-allowlist (EnsureTeamIpIsAllowed) kan alleen verder inperken. teams.edit, teams.ip-allowlist.update, switch en leave staan er expres buiten: zonder die ontsnappingsroute moet een admin die van netwerk wisselt via de database worden teruggezet. SaveTeamIpAllowListRequest weigert bovendien een lijst waar het eigen adres niet op staat.
 
 TrustProxies leest config('envserver.trusted_proxies') in proxies() en niet via $middleware->trustProxies() in bootstrap/app.php: die closure draait vóórdat config geladen is en config() gooit daar. Zonder ingestelde proxy vergelijkt elke allowlist het adres van de load balancer.
+
+## Deploy token IP check: environment list AND the token's own list
+A deploy token has its own ip_allowlist (ENV-3), on top of the environment's. ResolveDeployToken goes through DeployToken::allowsAddress(), which requires both lists to allow the address; an empty list on either side means no restriction from that side. A token list can only narrow, never widen the environment list — never check the token list alone. The list stays editable after creation (DeployTokenController@update → UpdateDeployTokenAllowList, audited as DeployTokenUpdated); the name is not (SaveDeployTokenRequest prohibits it on PATCH), and revoked tokens get 403.

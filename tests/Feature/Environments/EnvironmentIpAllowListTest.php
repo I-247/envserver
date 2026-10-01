@@ -10,6 +10,7 @@ use App\Enums\TeamRole;
 use App\Models\AuditEvent;
 use App\Models\Environment;
 use App\Models\Project;
+use App\Support\IpAllowList;
 use Illuminate\Testing\TestResponse;
 
 beforeEach(function () {
@@ -136,4 +137,48 @@ it('leaves the environment allow list alone for people using the browser', funct
             'environment' => $this->environment->slug,
         ]))
         ->assertOk();
+});
+
+it('blocks a pull from outside the token allow list even when the environment allows it', function () {
+    $token = publishedTokenFor($this->environment);
+    $token->model->update(['ip_allowlist' => ['203.0.113.0/24']]);
+
+    pullEnvFile($token, '198.51.100.7')->assertForbidden();
+
+    expect(AuditEvent::where('action', AuditAction::DeployTokenBlocked)->count())->toBe(1);
+});
+
+it('lets a token pull from inside both its own and the environment allow list', function () {
+    $this->environment->update(['ip_allowlist' => ['203.0.113.0/24']]);
+
+    $token = publishedTokenFor($this->environment);
+    $token->model->update(['ip_allowlist' => ['203.0.113.9']]);
+
+    pullEnvFile($token, '203.0.113.9')->assertOk()->assertSee('APP_ENV');
+});
+
+it('does not let a token allow list widen the environment allow list', function () {
+    $this->environment->update(['ip_allowlist' => ['203.0.113.0/24']]);
+
+    $token = publishedTokenFor($this->environment);
+    $token->model->update(['ip_allowlist' => ['198.51.100.7']]);
+
+    pullEnvFile($token, '198.51.100.7')->assertForbidden();
+});
+
+it('applies an allow list given when the token is created', function () {
+    $variable = app(CreateVariable::class)->handle($this->team, 'APP_ENV', 'production');
+    app(AttachVariableToEnvironment::class)->handle($variable, $this->environment);
+    app(PublishRelease::class)->handle($this->environment, $this->user);
+
+    $token = app(CreateDeployToken::class)->handle(
+        $this->environment,
+        'Ploi production',
+        $this->user,
+        ['env:read'],
+        allowList: IpAllowList::make(['203.0.113.9']),
+    );
+
+    pullEnvFile($token, '198.51.100.7')->assertForbidden();
+    pullEnvFile($token, '203.0.113.9')->assertOk();
 });

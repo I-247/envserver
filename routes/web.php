@@ -82,6 +82,7 @@ Route::prefix('{current_team}')
 
                 Route::get('deploy-tokens', [DeployTokenController::class, 'index'])->name('deploy-tokens.index');
                 Route::post('deploy-tokens', [DeployTokenController::class, 'store'])->name('deploy-tokens.store');
+                Route::patch('deploy-tokens/{deployToken}', [DeployTokenController::class, 'update'])->name('deploy-tokens.update');
                 Route::delete('deploy-tokens/{deployToken}', [DeployTokenController::class, 'destroy'])->name('deploy-tokens.destroy');
             });
     });

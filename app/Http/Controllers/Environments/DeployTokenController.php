@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Environments;
 
 use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\DeployTokens\CreateDeployToken;
+use App\Actions\DeployTokens\UpdateDeployTokenAllowList;
 use App\Enums\ApiScope;
 use App\Enums\AuditAction;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Environments\SaveDeployTokenRequest;
 use App\Models\DeployToken;
 use App\Models\Environment;
 use App\Models\Project;
@@ -39,6 +41,7 @@ class DeployTokenController extends Controller
                     'clientId' => $token->oauth_client_id,
                     'scopes' => $token->scopes,
                     'canPush' => in_array(ApiScope::EnvironmentWrite->value, $token->scopes, true),
+                    'ipAllowList' => $token->ipAllowList()->toArray(),
                     'useCount' => $token->use_count,
                     'lastUsedAt' => $token->last_used_at?->toISOString(),
                     'revokedAt' => $token->revoked_at?->toISOString(),
@@ -53,17 +56,13 @@ class DeployTokenController extends Controller
      * Issue a deploy token for this environment.
      */
     public function store(
-        Request $request,
+        SaveDeployTokenRequest $request,
         Team $currentTeam,
         Project $project,
         Environment $environment,
         CreateDeployToken $create,
     ): RedirectResponse {
         Gate::authorize('manageDeployTokens', $project);
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-        ]);
 
         // Read via $request->boolean(), not the "boolean" validation rule: a
         // native checked checkbox submits "on", which FILTER_VALIDATE_BOOLEAN
@@ -82,9 +81,10 @@ class DeployTokenController extends Controller
 
         $token = $create->handle(
             $environment,
-            $validated['name'],
+            $request->string('name')->toString(),
             $request->user(),
             $scopes,
+            allowList: $request->allowList(),
         );
 
         // Explicit destination rather than back(): this redirect is the one
@@ -100,6 +100,30 @@ class DeployTokenController extends Controller
             'clientSecret' => $token->clientSecret,
             'canPush' => in_array(ApiScope::EnvironmentWrite->value, $scopes, true),
         ]);
+    }
+
+    /**
+     * Change the addresses a deploy token may pull from.
+     *
+     * A revoked token stays revoked, so there is nothing left to restrict.
+     */
+    public function update(
+        SaveDeployTokenRequest $request,
+        Team $currentTeam,
+        Project $project,
+        Environment $environment,
+        DeployToken $deployToken,
+        UpdateDeployTokenAllowList $update,
+    ): RedirectResponse {
+        Gate::authorize('manageDeployTokens', $project);
+
+        abort_unless($deployToken->isUsable(), 403);
+
+        $update->handle($deployToken, $request->allowList(), $request->user());
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('IP allow list saved.')]);
+
+        return back();
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\IpAllowList;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,6 +21,7 @@ use Illuminate\Support\Facades\DB;
  * @property string $oauth_client_id
  * @property string $name
  * @property list<string> $scopes
+ * @property list<string>|null $ip_allowlist
  * @property int $use_count
  * @property int|null $created_by
  * @property Carbon|null $last_used_at
@@ -30,7 +32,7 @@ use Illuminate\Support\Facades\DB;
  * @property-read Environment $environment
  * @property-read User|null $creator
  */
-#[Fillable(['environment_id', 'oauth_client_id', 'name', 'scopes', 'created_by', 'expires_at'])]
+#[Fillable(['environment_id', 'oauth_client_id', 'name', 'scopes', 'ip_allowlist', 'created_by', 'expires_at'])]
 class DeployToken extends Model
 {
     /**
@@ -78,6 +80,29 @@ class DeployToken extends Model
     }
 
     /**
+     * Get the addresses this token may pull from, on top of the environment's.
+     *
+     * Empty means the token adds no restriction of its own; the environment's
+     * list still applies either way. A token can only narrow, never widen.
+     */
+    public function ipAllowList(): IpAllowList
+    {
+        return IpAllowList::make($this->ip_allowlist);
+    }
+
+    /**
+     * Determine whether the address may use this token.
+     *
+     * Both lists have to agree: the environment's, which covers every token
+     * for it, and the token's own.
+     */
+    public function allowsAddress(?string $ip): bool
+    {
+        return $this->environment->ipAllowList()->allows($ip)
+            && $this->ipAllowList()->allows($ip);
+    }
+
+    /**
      * Determine whether the token may still be used.
      */
     public function isUsable(): bool
@@ -121,6 +146,7 @@ class DeployToken extends Model
     {
         return [
             'scopes' => 'array',
+            'ip_allowlist' => 'array',
             'use_count' => 'integer',
             'last_used_at' => 'datetime',
             'expires_at' => 'datetime',

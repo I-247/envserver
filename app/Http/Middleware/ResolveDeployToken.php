@@ -56,7 +56,7 @@ class ResolveDeployToken extends ValidateToken
     }
 
     /**
-     * Keep the token on the allow list its environment configured, if any.
+     * Keep the token on the allow lists of its environment and of itself.
      *
      * This is the last gate rather than the first: rejecting an address is
      * only worth auditing once the token behind it is known, and a blocked
@@ -66,7 +66,7 @@ class ResolveDeployToken extends ValidateToken
     {
         $environment = $deployToken->environment;
 
-        if ($environment->ipAllowList()->allows($request->ip())) {
+        if ($deployToken->allowsAddress($request->ip())) {
             return;
         }
 
