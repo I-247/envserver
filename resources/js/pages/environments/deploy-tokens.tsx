@@ -1,5 +1,5 @@
 import { Form, Head, router, usePage } from '@inertiajs/react';
-import { Download, KeyRound, Plus, Trash2 } from 'lucide-react';
+import { Download, KeyRound, Network, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import Code from '@/components/code';
 import CopyButton from '@/components/copy-button';
@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import environments, { show as environmentShow } from '@/routes/environments';
 import { index as projectsIndex, show as projectShow } from '@/routes/projects';
 
@@ -29,6 +30,8 @@ type DeployTokenRow = {
     clientId: string;
     scopes: string[];
     canPush: boolean;
+    /** The token's own allow list. Empty: no restriction of its own. */
+    ipAllowList: string[];
     useCount: number;
     lastUsedAt: string | null;
     revokedAt: string | null;
@@ -163,6 +166,121 @@ function formatUsage(count: number, lastUsedAt: string | null): string {
     return `Used ${count} ${count === 1 ? 'time' : 'times'} · last ${moment}`;
 }
 
+/**
+ * Where a token may be used from, in one line for the token list.
+ */
+function formatAllowList(ipAllowList: string[]): string {
+    if (ipAllowList.length === 0) {
+        return 'Any address the environment allows';
+    }
+
+    return `Only from ${ipAllowList.join(', ')}`;
+}
+
+/**
+ * The allow list field, shared by the create and the edit dialog so both
+ * explain the same thing: a token can only narrow the environment's list.
+ */
+function AllowListField({
+    id,
+    defaultValue,
+    error,
+}: {
+    id: string;
+    defaultValue?: string[];
+    error?: string;
+}) {
+    return (
+        <div className="grid gap-2">
+            <Label htmlFor={id}>Allowed IP addresses</Label>
+            <Textarea
+                id={id}
+                name="ip_allowlist"
+                data-test="deploy-token-ip-allowlist"
+                defaultValue={(defaultValue ?? []).join('\n')}
+                rows={3}
+                spellCheck={false}
+                className="font-mono"
+                placeholder={'203.0.113.4\n10.0.0.0/8'}
+            />
+            <p className="text-sm text-muted-foreground">
+                One IP address or CIDR range per line. Leave it empty and the
+                token can be used from any address the environment allows. The
+                environment's own list always applies as well.
+            </p>
+            <InputError message={error} />
+        </div>
+    );
+}
+
+/**
+ * Change where an existing token may be used from, without issuing a new
+ * secret: moving a deploy server should not mean editing every script.
+ */
+function EditAllowListDialog({
+    token,
+    args,
+}: {
+    token: DeployTokenRow;
+    args: [string, string, string];
+}) {
+    const [open, setOpen] = useState(false);
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Change IP restriction of ${token.name}`}
+                    data-test="edit-deploy-token-ip-allowlist"
+                >
+                    <Network className="size-4" />
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <Form
+                    key={String(open)}
+                    {...environments.deployTokens.update.form([
+                        ...args,
+                        token.id,
+                    ])}
+                    options={{ preserveScroll: true }}
+                    className="space-y-6"
+                    onSuccess={() => setOpen(false)}
+                >
+                    {({ errors, processing }) => (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>IP restriction</DialogTitle>
+                                <DialogDescription>
+                                    Where {token.name} may be used from. The
+                                    token and its secret stay the same.
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <AllowListField
+                                id={`deploy-token-${token.id}-ip-allowlist`}
+                                defaultValue={token.ipAllowList}
+                                error={errors.ip_allowlist}
+                            />
+
+                            <DialogFooter className="gap-2">
+                                <DialogClose asChild>
+                                    <Button variant="secondary">Cancel</Button>
+                                </DialogClose>
+                                <Button type="submit" disabled={processing}>
+                                    Save
+                                </Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </Form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function DeployTokens({
     project,
     environment,
@@ -228,6 +346,11 @@ export default function DeployTokens({
                                             />
                                             <InputError message={errors.name} />
                                         </div>
+
+                                        <AllowListField
+                                            id="ip_allowlist"
+                                            error={errors.ip_allowlist}
+                                        />
 
                                         <div className="flex items-start gap-3">
                                             <Checkbox
@@ -406,24 +529,36 @@ export default function DeployTokens({
                                             token.lastUsedAt,
                                         )}
                                     </p>
+                                    <p
+                                        className="text-sm text-muted-foreground"
+                                        data-test="deploy-token-allowlist"
+                                    >
+                                        {formatAllowList(token.ipAllowList)}
+                                    </p>
                                 </div>
 
                                 {token.revokedAt ? null : (
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        aria-label="Revoke token"
-                                        data-test="revoke-deploy-token"
-                                        onClick={() =>
-                                            router.delete(
-                                                environments.deployTokens.destroy.url(
-                                                    [...args, token.id],
-                                                ),
-                                            )
-                                        }
-                                    >
-                                        <Trash2 className="size-4" />
-                                    </Button>
+                                    <div className="flex items-center gap-1">
+                                        <EditAllowListDialog
+                                            token={token}
+                                            args={args}
+                                        />
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            aria-label="Revoke token"
+                                            data-test="revoke-deploy-token"
+                                            onClick={() =>
+                                                router.delete(
+                                                    environments.deployTokens.destroy.url(
+                                                        [...args, token.id],
+                                                    ),
+                                                )
+                                            }
+                                        >
+                                            <Trash2 className="size-4" />
+                                        </Button>
+                                    </div>
                                 )}
                             </div>
                         ))}
