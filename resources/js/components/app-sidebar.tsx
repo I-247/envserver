@@ -1,5 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
-import { Boxes, Hammer, LayoutGrid, ScrollText } from 'lucide-react';
+import { BookOpen, Boxes, Hammer, LayoutGrid, ScrollText } from 'lucide-react';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { TeamSwitcher } from '@/components/team-switcher';
@@ -13,6 +13,7 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { audit, builtBy, dashboard } from '@/routes';
+import { cli as cliDocs } from '@/routes/docs';
 import { index as projectsIndex } from '@/routes/projects';
 import type { NavItem } from '@/types';
 
@@ -65,6 +66,19 @@ export function AppSidebar() {
 
             <SidebarFooter>
                 <SidebarMenu>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton
+                            asChild
+                            size="sm"
+                            tooltip="CLI documentation"
+                            className="text-muted-foreground"
+                        >
+                            <Link href={cliDocs()}>
+                                <BookOpen />
+                                <span>CLI documentation</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
                     <SidebarMenuItem>
                         <SidebarMenuButton
                             asChild

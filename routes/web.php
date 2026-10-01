@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Audit\AuditController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Docs\CliDocumentationController;
 use App\Http\Controllers\Environments\ConfirmSecretAccessController;
 use App\Http\Controllers\Environments\DeployTokenController;
 use App\Http\Controllers\Environments\EnvFileDownloadController;
@@ -22,6 +23,8 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', HomeController::class)->name('home');
 
 Route::inertia('built-by', 'built-by')->name('built-by');
+
+Route::get('docs/cli', CliDocumentationController::class)->name('docs.cli');
 
 Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class, EnsureTeamIpIsAllowed::class, EnsureTeamTwoFactorRequirementIsMet::class])

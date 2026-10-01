@@ -121,6 +121,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | CLI Documentation
+    |--------------------------------------------------------------------------
+    |
+    | Whether the envclient documentation at /docs/cli can be read without an
+    | account. It holds no secrets, only how to install and use the CLI, and
+    | it shows this server's URL in its examples. Turn it off to keep that
+    | page for signed in users only.
+    |
+    */
+
+    'public_cli_docs' => (bool) env('ENVSERVER_PUBLIC_CLI_DOCS', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | API Tokens
     |--------------------------------------------------------------------------
     |

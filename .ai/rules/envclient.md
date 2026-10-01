@@ -44,3 +44,6 @@ Everything in the working directory (envclient.json, .env, .envclientrc) may com
 config.LoadDeployEnv only lets a file set CLIENT_ID, CLIENT_SECRET, SCOPES and SERVER. SERVER is taken from a file only when that same file's id+secret are the credentials in effect (suppliesCredentialsInUse), so a committed .env cannot redirect exported CI credentials. ENVCLIENT_CONFIG_DIR and ENVCLIENT_VAULT_KEY are export-only. A deploy token in the user's own .env together with its SERVER still works.
 
 config.CheckServer runs before any token leaves: https only, plain http just for loopback, *.localhost and *.test.
+
+## CLI docs live in two places: keep both in step with the commands
+The envclient reference (commands, flags, ENVCLIENT_* variables, exit codes, troubleshooting messages) is written out in both cli/README.md and the portal page resources/js/pages/docs/cli.tsx (route docs.cli). Neither is generated from cobra. When a command, flag, environment variable or quoted error message changes, update both. Whether /docs/cli is public is ENVSERVER_PUBLIC_CLI_DOCS (config envserver.public_cli_docs, default true), checked in CliDocumentationController per request rather than as route middleware so a cached route list does not freeze it.

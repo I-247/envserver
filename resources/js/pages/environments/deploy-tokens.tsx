@@ -1,4 +1,4 @@
-import { Form, Head, router, usePage } from '@inertiajs/react';
+import { Form, Head, Link, router, usePage } from '@inertiajs/react';
 import { Download, KeyRound, Network, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import Code from '@/components/code';
@@ -21,6 +21,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { cli as cliDocs } from '@/routes/docs';
 import environments, { show as environmentShow } from '@/routes/environments';
 import { index as projectsIndex, show as projectShow } from '@/routes/projects';
 
@@ -393,6 +394,16 @@ export default function DeployTokens({
                         </DialogContent>
                     </Dialog>
                 </div>
+
+                <p className="text-sm text-muted-foreground">
+                    <Link
+                        href={`${cliDocs.url()}#deploy-server`}
+                        className="underline underline-offset-4 hover:text-foreground"
+                        data-test="deploy-token-docs-link"
+                    >
+                        How to use a deploy token on a server
+                    </Link>
+                </p>
 
                 {newToken ? (
                     <div
